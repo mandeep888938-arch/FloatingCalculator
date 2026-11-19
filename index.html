@@ -1,0 +1,1252 @@
+<!DOCTYPE html>
+<html lang="pa"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ਕੈਲਕੁਲੇਟਰ</title>
+<style>
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#e2e5ea;min-height:100vh}
+@media (prefers-color-scheme:dark){body{background:#1c1f26}}
+/* ਛੋਟੀ ਸਕ੍ਰੀਨ: ਕੈਲਕੁਲੇਟਰ ਤੋਂ ਬਾਹਰਲਾ ਖੇਤਰ ਪਾਰਦਰਸ਼ੀ (ਪਿੱਛੇ ਵਾਲੀ ਐਪ ਦਿਸੇ); ਪਿਛੋਕੜ ਸਿਰਫ਼ ਫੁੱਲ ਸਕ੍ਰੀਨ ਵਿੱਚ */
+html:not(.hk-full),html:not(.hk-full) body{background:transparent!important}
+</style>
+<style>
+/* ================= ਕੈਲਕੁਲੇਟਰ (+ − × ÷) ================= */
+.hkc-panel{--cop:.85;--hkc-bg:255,255,255;--hkc-txt:#111827;--hkc-mut:#6b7280;--hkc-line:rgba(17,24,39,.16);--hkc-acc:#ea580c;--hkc-acc-rgb:234,88,12;--hkc-fn:#c2410c;--hkc-hl:rgba(234,88,12,.16);
+  position:fixed;left:0;top:0;width:232px;z-index:1200;display:none;flex-direction:column;border-radius:24px;padding:6px 8px 42px;color:var(--hkc-txt);
+  transform-origin:0 0;isolation:isolate;background:transparent;
+  user-select:none;-webkit-user-select:none;touch-action:manipulation}
+/* ਪਿਛੋਕੜ ਵੱਖਰੀ ਪਰਤ 'ਤੇ: ਪਾਰਦਰਸ਼ਤਾ ਬਦਲਣ ਨਾਲ ਸਿਰਫ਼ opacity ਬਦਲਦੀ ਹੈ (ਹਲਕਾ ਤੇ ਤੇਜ਼) */
+.hkc-panel::before{content:"";position:absolute;left:0;top:0;right:0;bottom:0;border-radius:inherit;z-index:-1;pointer-events:none;
+  background:rgb(var(--hkc-bg));opacity:var(--cop);border:1.5px solid rgba(128,128,128,.4);
+  box-shadow:0 10px 26px rgba(0,0,0,.34)}
+.hkc-panel.drag{will-change:transform}
+.hkc-main{text-shadow:0 0 4px rgba(var(--hkc-bg),.7)}
+.hkc-panel.open{display:flex;animation:hkcPop .18s ease-out}
+@keyframes hkcPop{from{opacity:0}to{opacity:1}}
+@media (prefers-color-scheme:dark){.hkc-panel{--hkc-bg:10,10,12;--hkc-txt:#f3f4f6;--hkc-mut:#8b8f98;--hkc-line:rgba(255,255,255,.16);--hkc-acc:#ff7a2f;--hkc-acc-rgb:255,122,47;--hkc-fn:#d9622b;--hkc-hl:rgba(255,122,47,.18)}}
+
+/* ਹੈਡਰ: ਪੂਰੀ ਪੱਟੀ ਫੜ ਕੇ ਖਿੱਚੋ */
+.hkc-head{display:flex;align-items:center;gap:6px;padding:0 2px 4px}
+.hkc-grip{flex:none;width:44px;height:38px;display:flex;align-items:center;justify-content:center;cursor:grab;touch-action:none;border-radius:12px}
+.hkc-grip:active{cursor:grabbing;background:transparent}
+.hkc-dots{flex:none;width:26px;height:16px;display:grid;grid-template-columns:repeat(3,1fr);gap:3px;align-content:center;opacity:.55}
+.hkc-dots i{display:block;width:4px;height:4px;border-radius:50%;background:var(--hkc-txt)}
+.hkc-hbtn{flex:none;width:34px;height:34px;border-radius:12px;border:1px solid var(--hkc-line);background:transparent;color:var(--hkc-txt);font-size:17px;font-weight:900;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;text-shadow:none;touch-action:manipulation}
+.hkc-hbtn:active{transform:scale(.92);background:var(--hkc-hl)}
+#hkcFs{border:0;background:transparent;width:46px;height:40px;position:relative}
+#hkcFs::after{content:"";position:absolute;left:-6px;right:-6px;top:-8px;bottom:-8px} /* ਦਬਾਉਣ ਵਾਲਾ ਖੇਤਰ ਵੱਡਾ */
+#hkcFs svg{width:17px;height:17px;stroke-width:1.6} /* ਫੁੱਲ ਸਕ੍ਰੀਨ ਤੀਰ ਛੋਟਾ (ਦਬਾਉਣ ਵਾਲਾ ਖੇਤਰ ਉਹੀ) */
+#hkcClose{width:20px;height:20px;border-radius:7px;font-size:10px;color:#ef4444;background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.45)}
+#hkcClose:active{background:rgba(239,68,68,.28)}
+
+/* ਪਾਰਦਰਸ਼ਤਾ ਸਲਾਈਡਰ */
+.hkc-op{flex:1;min-width:0;display:flex;align-items:center;gap:5px}
+.hkc-op span{font-size:.8rem;color:var(--hkc-mut);font-weight:800;line-height:1}
+.hkc-op b{flex:none;min-width:30px;text-align:right;font-size:.72rem;font-weight:800;color:var(--hkc-mut)}
+.hkc-sl{flex:1;position:relative;height:34px;margin:0 8px;touch-action:none;cursor:pointer}
+.hkc-sl .trk{position:absolute;left:0;right:0;top:15px;height:4px;box-sizing:border-box;border-radius:4px;background:#fff;border:1px solid rgba(128,128,128,.7);box-shadow:0 0 0 .5px rgba(0,0,0,.3)}
+.hkc-sl .thb{position:absolute;top:9px;left:15%;width:16px;height:16px;box-sizing:border-box;margin-left:-8px;border-radius:50%;background:#fff;border:1.5px solid var(--hkc-acc);box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.hkc-tape{contain:layout paint;height:200px;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;-webkit-overflow-scrolling:touch;padding:3px 4px;scrollbar-width:none}
+.hkc-tape::-webkit-scrollbar{display:none}
+.hkc-empty{font-size:.7rem;line-height:1.45;color:var(--hkc-mut);text-align:right;padding:8px 10px;font-weight:600}
+.hkc-row{padding:1px 10px;border-radius:12px;text-align:right;cursor:pointer;}
+.hkc-row .n{display:inline;padding:1px 2px;margin:0;border-radius:4px;cursor:pointer;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.hkc-row .n:active{background:var(--hkc-hl)}
+.hkc-row .n.sel{background:rgba(var(--hkc-acc-rgb),.38);outline:0;color:var(--hkc-txt);font-weight:600}
+.hkc-panel.pend .hkc-k.op,.hkc-panel.pend .hkc-k[data-k="C"],.hkc-panel.pend .hkc-k[data-k="%"]{opacity:.3;pointer-events:none}
+.hkc-panel.pend .hkc-k.eq::before{background:#2196f3;box-shadow:0 3px 10px rgba(33,150,243,.35)}
+.hkc-row .e{font-size:.92rem;color:var(--hkc-mut);word-break:break-all;line-height:1.35}
+.hkc-row .r{font-size:1.05rem;color:var(--hkc-mut);line-height:1.3}
+.hkc-row.hit{background:var(--hkc-acc)!important}
+.hkc-row.hit .e,.hkc-row.hit .r{color:#fff!important}
+.hkc-main{padding:4px 12px 6px;text-align:right;border-bottom:1px solid var(--hkc-line)}
+.hkc-expr{height:64px;display:flex;flex-direction:column;font-size:1.3rem;font-weight:300;color:var(--hkc-txt);word-break:break-all;line-height:1.35;padding:2px 2px;box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none}
+.hkc-expr::-webkit-scrollbar{display:none}
+.hkc-expr .ex{display:block;margin-top:auto;flex:none}
+.hkc-sel{background:rgba(var(--hkc-acc-rgb),.38);outline:0;border-radius:4px;padding:1px 0;margin:0;font-weight:500;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.hkc-total{height:38px;font-size:1.9rem;font-weight:300;line-height:1.25;color:var(--hkc-txt);white-space:nowrap;overflow:hidden}
+.hkc-total.err{color:#ef4444;font-size:1rem;font-weight:700}
+.hkc-total.hint{color:var(--hkc-acc);font-size:.85rem;font-weight:700;line-height:1.4}
+
+.hkc-keys{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:34px;gap:2px;margin-top:4px;position:relative;z-index:3} /* ਬਟਨ ਆਕਾਰ-ਬਦਲਣ ਵਾਲੀ ਪਕੜ ਦੇ ਉੱਪਰ: ਹੇਠਲਾ ਅੱਧ ਦਬਾਉਣ 'ਤੇ ਵੀ ਚੱਲਦਾ ਹੈ */
+.hkc-k{border:0;border-radius:13px;background:transparent;font-size:1.2rem;font-weight:300;color:var(--hkc-txt);cursor:pointer;padding:0;transition:none;text-shadow:none}
+.hkc-k:active{background:var(--hkc-hl)}
+.hkc-k.op{color:var(--hkc-acc);font-size:1.45rem;font-weight:400}
+.hkc-k.fn{color:var(--hkc-fn);font-size:1.45rem;font-weight:400}
+.hkc-k.wide{grid-column:span 2}
+.hkc-k.eq{margin-top:10px}
+.hkc-k.eq{position:relative;isolation:isolate;background:transparent;color:var(--hkc-acc);font-size:1.45rem;font-weight:500;text-shadow:none;box-shadow:none}
+.hkc-k.eq::before{content:"";position:absolute;left:50%;top:50%;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;z-index:-1;background:rgba(var(--hkc-acc-rgb),calc(.22 + var(--cop) * .78));box-shadow:0 3px 10px rgba(249,115,22,calc(var(--cop) * .3))}
+.hkc-k.eq{color:#fff}
+.hkc-k.eq:active{background:var(--hkc-hl)}
+.hkc-rz{position:absolute;right:-6px;bottom:-6px;width:68px;height:46px;border-radius:0;cursor:nwse-resize;touch-action:none;opacity:.75;display:flex;align-items:flex-end;justify-content:flex-end;padding:0 15px 13px 0;text-shadow:none}
+.hkc-rz svg{width:16px;height:16px;stroke:var(--hkc-txt);stroke-width:2;stroke-linecap:round;fill:none}
+
+/* ਕੈਲਕੁਲੇਟਰ: ਹੇਠਲੇ ਖੱਬੇ ਪਾਸੇ ਵੀ ਹਿਲਾਉਣ ਵਾਲੀ ਪਕੜ (ਕੀਪੈਡ ਦੇ ਹੇਠਾਂ ਖਾਲੀ ਪੱਟੀ ਵਿੱਚ, 0/00 ਉੱਤੇ ਨਹੀਂ ਚੜ੍ਹਦੀ) */
+.hkc-grip.bl{position:absolute;left:64px;right:68px;bottom:0;width:auto;height:38px;z-index:2;justify-content:flex-start;padding-left:calc(50% - 77px);box-sizing:border-box;border-radius:12px} /* ਡੌਟਸ ਹਰ ਚੌੜਾਈ 'ਤੇ ਪੈਨਲ ਦੇ ਐਨ ਵਿਚਕਾਰ; ਪਕੜ ਸੱਜੇ ਪਾਸੇ ਸਾਈਜ਼ ਵਾਲੇ ਬਟਨ (68px) ਤੱਕ ਨਹੀਂ ਪਹੁੰਚਦੀ */
+
+.hkc-pw{display:block;height:11px;line-height:11px;padding:5px 0 0 0;margin:0 0 -5px 0;font-size:.5rem;font-weight:800;color:var(--hkc-mut);opacity:.85;text-shadow:none;white-space:nowrap;pointer-events:none;text-align:left}
+.hkc-pw+.hkc-keys{margin-top:1px}
+/* ਹੇਠਲੇ ਖੱਬੇ ਪਾਸੇ fx ਬਟਨ: ਸਾਇੰਟੀਫ਼ਿਕ ਬਟਨਾਂ ਦੀ ਸਕ੍ਰੀਨ ਖੋਲ੍ਹਦਾ/ਬੰਦ ਕਰਦਾ ਹੈ */
+.hkc-fx{position:absolute;left:4px;bottom:0;width:58px;height:38px;z-index:4;border-radius:14px;border:0;background:transparent;color:var(--hkc-txt);font:inherit;font-size:.92rem;font-weight:700;font-style:italic;padding:0;cursor:pointer;text-shadow:none;touch-action:manipulation;display:flex;align-items:center;justify-content:center}
+.hkc-fx:active{background:var(--hkc-hl)}
+.hkc-fx.on{background:transparent;color:var(--hkc-txt)}
+.hkc-fx svg{stroke-width:1.55}
+.hkc-panel.fsz .hkc-fx svg{stroke-width:1.35}
+/* ਸਾਇੰਟੀਫ਼ਿਕ ਬਟਨ (ਹਿਸਟਰੀ ਵਾਲੀ ਥਾਂ 'ਤੇ ਆਉਂਦੇ ਹਨ; ਨਤੀਜਾ ਤੇ ਕੀਪੈਡ ਦਿਸਦੇ ਰਹਿੰਦੇ ਹਨ) */
+.hkc-sci{display:none;touch-action:none}
+.hkc-panel.sci .hkc-sci{display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(6,1fr);gap:1px 2px;height:206px;padding:3px 4px;box-sizing:border-box}
+.hkc-panel.sci .hkc-tape{display:none}
+.hkc-panel.fsz.sci .hkc-sci{flex:1 1 0;height:auto;min-height:0}
+.hkc-sk{border:0;border-radius:10px;background:transparent;color:var(--hkc-txt);opacity:.85;font:inherit;font-size:.8rem;font-weight:400;padding:0;cursor:pointer;touch-action:none;text-shadow:none;white-space:nowrap;min-width:0;overflow:hidden}
+.hkc-sk:active{background:var(--hkc-hl)}
+.hkc-sk sup{font-size:.62em;line-height:0;position:relative;top:-.15em;vertical-align:baseline;margin-left:1px}
+.hkc-sk.mm{color:var(--hkc-acc);opacity:1;font-weight:600}
+.hkc-sk.mon{box-shadow:inset 0 0 0 1.5px var(--hkc-acc)}
+.hkc-sk.on{background:var(--hkc-acc);color:#fff;opacity:1}
+.tl-t{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.tl-t.lift{position:relative;z-index:3;pointer-events:none;transition:none!important;color:var(--hkc-txt);background:linear-gradient(var(--hkc-hl),var(--hkc-hl)),rgb(var(--hkc-bg));box-shadow:0 8px 20px rgba(0,0,0,.4)}
+.tl-grid.dg{overflow-x:hidden}
+.hkc-main,.hkc-keys,.hkc-k{touch-action:none}
+.hkc-tools{position:absolute;left:8px;right:8px;top:46px;bottom:40px;z-index:3;display:none;flex-direction:column;background:rgb(var(--hkc-bg));border-radius:14px;overflow:hidden;text-shadow:none;touch-action:pan-y;color:var(--hkc-txt)}
+.hkc-tools.on{display:flex;animation:hkcPop .18s ease-out}
+.tl-h{display:flex;align-items:center;gap:8px;padding:2px;font-weight:700;font-size:.95rem}
+.tl-h .hkc-hbtn{width:42px;height:42px;border-radius:14px;font-size:26px;line-height:1;padding-bottom:3px} /* ਵਾਪਸੀ ਤੀਰ ਵੱਡਾ */
+.tl-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;overflow-y:auto;flex:1;align-content:start;scrollbar-width:none}
+.tl-t{border:0;background:transparent;color:var(--hkc-mut);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:3px;padding:8px 1px;border-radius:12px;font-size:.62rem;line-height:1.2;text-align:center;cursor:pointer}
+.tl-t b{font-size:1.5rem;font-weight:400;line-height:1.2}
+.tl-t:active{background:var(--hkc-hl)}
+.tl-t b svg{display:block;width:34px;height:34px;filter:drop-shadow(0 2px 2px rgba(0,0,0,.35))}
+.tl-body{padding:2px 4px;overflow-y:auto;flex:1;user-select:text;-webkit-user-select:text}
+.tl-body label{display:block;font-size:.65rem;color:var(--hkc-mut);margin:4px 0 1px}
+.tl-body input,.tl-body select{width:100%;box-sizing:border-box;font-size:.95rem;padding:5px 8px;border-radius:10px;border:1px solid var(--hkc-line);background:transparent;color:var(--hkc-txt);outline:0;font-family:inherit}
+.tl-body option{background:rgb(var(--hkc-bg));color:var(--hkc-txt)}
+.tl-res{margin-top:6px;padding:5px 8px;border-radius:10px;background:var(--hkc-hl);font-size:1.05rem;font-weight:600;text-align:right;word-break:break-all;min-height:22px;line-height:1.35}
+.tl-body .ag-r{display:flex;justify-content:space-between;align-items:center;gap:4px;padding:5px 0;font-size:.8rem}
+.tl-body .ag-r input{width:auto;flex:none;border:0;padding:2px;font-size:.82rem;font-weight:700;text-align:right;color:var(--hkc-txt);color-scheme:light dark}
+.tl-body .ag-r input.o{color:var(--hkc-acc)}
+.ag-c{margin-top:6px;padding:8px 6px;border-radius:16px;background:rgba(128,128,128,.14);text-align:center}
+.ag-t{display:flex;align-items:stretch}.ag-t>div:not(.ag-v){flex:1;min-width:0}
+.ag-v{width:1px;background:var(--hkc-line);margin:0 4px}
+.ag-h{font-size:.95rem;font-weight:300;text-align:left;padding-left:4px}.ag-h.o{color:var(--hkc-acc);font-size:.62rem;font-weight:600;text-align:center;padding:0}
+.ag-big{font-size:.75rem;text-align:left;padding-left:4px;margin:2px 0}.ag-big b{font-size:2.5rem;font-weight:300;color:var(--hkc-acc);line-height:1}
+.ag-c small{display:block;font-size:.58rem;color:var(--hkc-txt);line-height:1.3}
+.ag-cake{width:34px;height:34px;line-height:34px;border-radius:50%;background:var(--hkc-acc);margin:5px auto;font-size:1rem}
+.ag-m{font-size:.8rem}
+.ag-s{margin:8px 0 4px;padding-top:6px;border-top:1px solid var(--hkc-line);color:var(--hkc-acc);font-size:.8rem}
+.ag-g{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 2px}
+.ag-g small{color:var(--hkc-mut);font-size:.58rem}.ag-g b{font-size:.85rem;font-weight:400;word-break:break-all}
+.bm-r{display:flex;gap:6px}.bm-r select{flex:1.3;min-width:0}.bm-r input{flex:1;min-width:0;text-align:right;color:var(--hkc-acc);font-weight:600}
+.tl-sel{display:block;width:100%;box-sizing:border-box;text-align:left;font:inherit;font-size:.9rem;padding:5px 8px;border-radius:10px;border:1px solid var(--hkc-line);background:transparent;color:var(--hkc-txt);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bm-r .tl-sel{flex:1.3;min-width:0;width:auto}
+.tl-sheet{position:absolute;left:0;right:0;top:0;bottom:0;z-index:5;display:flex;flex-direction:column;justify-content:flex-end}
+.tl-bd{position:absolute;left:0;right:0;top:0;bottom:0;background:rgba(0,0,0,.45)}
+.tl-sh{position:relative;display:flex;flex-direction:column;max-height:94%;padding:8px 6px 6px;border-radius:18px 18px 0 0;background:linear-gradient(rgba(128,128,128,.22),rgba(128,128,128,.22)),rgb(var(--hkc-bg));animation:hkcPop .15s ease-out}
+.tl-st{text-align:center;font-weight:600;font-size:.85rem;padding:4px}
+.tl-sl{overflow-y:auto;flex:1;min-height:0;scrollbar-width:none;touch-action:pan-y}
+.tl-so{display:block;width:100%;text-align:left;border:0;background:transparent;color:var(--hkc-txt);font:inherit;font-size:.85rem;padding:10px 12px;cursor:pointer;border-radius:10px}
+.tl-so.on{color:var(--hkc-acc);font-weight:700}.tl-so:active{background:var(--hkc-hl)}
+.tl-so{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.tl-so.lift{position:relative;z-index:3;pointer-events:none;transition:none;color:var(--hkc-txt);background:linear-gradient(var(--hkc-hl),var(--hkc-hl)),rgb(var(--hkc-bg));box-shadow:0 8px 20px rgba(0,0,0,.4)}
+.tl-hint{text-align:center;font-size:.6rem;color:var(--hkc-mut);padding:0 4px 4px}
+.tl-cn{margin:6px 4px 2px;border:0;border-radius:20px;padding:9px;background:rgba(128,128,128,.28);color:var(--hkc-mut);font:inherit;font-size:.85rem;cursor:pointer}
+.bm-sc{margin-top:10px}
+.bm-bar{position:relative;display:flex;height:10px;border-radius:6px;overflow:visible}
+.bm-bar i{display:block;height:100%}.bm-bar i:first-child{border-radius:6px 0 0 6px}.bm-bar i:nth-child(4){border-radius:0 6px 6px 0}
+.bm-bar u{position:absolute;top:-3px;width:14px;height:14px;margin-left:-7px;box-sizing:border-box;border-radius:50%;background:#fff;border:3px solid var(--hkc-txt);transition:left .25s;text-decoration:none}
+.bm-nm{display:flex;margin-top:6px}.bm-nm span{flex:none;font-size:.55rem;color:var(--hkc-mut);text-align:center;line-height:1.2}
+.bm-nm span:nth-child(1){width:28.33%}.bm-nm span:nth-child(2){width:21.67%}.bm-nm span:nth-child(3){width:16.67%}.bm-nm span:nth-child(4){width:33.33%}
+.bm-nm span.on{color:var(--hkc-txt);font-weight:800}
+.bm-tk{position:relative;height:12px;margin-top:2px}.bm-tk span{position:absolute;transform:translateX(-50%);font-size:.55rem;color:var(--hkc-mut)}
+.tl-res small{font-size:.72rem;font-weight:500;color:var(--hkc-mut)}
+/* ਟੂਲ ਖੁੱਲ੍ਹਣ 'ਤੇ ਕੈਲਕੁਲੇਟਰ ਦਾ ਕੀਪੈਡ ਹੇਠਾਂ ਦਿਸਦਾ ਰਹਿੰਦਾ ਹੈ */
+.hkc-panel.tl .hkc-k.op:not([data-k="−"]),.hkc-panel.tl .hkc-k[data-k="%"]{opacity:.3}
+.tl-body input.act{border-color:var(--hkc-acc);box-shadow:0 0 0 1px var(--hkc-acc)}
+.tl-body input.act.fresh{background:var(--hkc-hl)}
+.tl-body input[readonly]{caret-color:transparent;cursor:pointer}
+.hkc-tools.on.in{animation:tlIn .42s cubic-bezier(.2,.9,.25,1.1) both}
+.hkc-tools.on.out{animation:tlOutA .3s cubic-bezier(.5,0,.9,.5) both}
+.hkc-panel.tin .hkc-tape,.hkc-panel.tin .hkc-main{animation:bgShrink .42s ease-out forwards}
+.hkc-panel.tout .hkc-tape,.hkc-panel.tout .hkc-main{animation:bgGrow .42s cubic-bezier(.2,.9,.25,1.1) both}
+@keyframes tlIn{0%{transform:translateX(20%) scale(.9);opacity:0}100%{transform:none;opacity:1}} /* ਪੈਨਲ ਦੇ ਅੰਦਰੋਂ ਉੱਭਰਦਾ ਹੈ, ਬਾਹਰੋਂ ਨਹੀਂ */
+@keyframes tlOutA{0%{transform:none;opacity:1}100%{transform:translateX(20%) scale(.9);opacity:0}}
+@keyframes bgShrink{0%{transform:none;opacity:1}100%{transform:scale(.8);opacity:.2}}
+@keyframes bgGrow{0%{transform:scale(.8);opacity:.2}100%{transform:none;opacity:1}}
+@keyframes tlJump{0%{transform:translateX(var(--jx)) scale(.92);opacity:0}100%{transform:none;opacity:1}}
+.gs{display:flex;border:1px solid var(--hkc-line);border-radius:10px;overflow:hidden;margin-top:6px}
+.gs button{flex:1;min-width:0;border:0;border-right:1px solid var(--hkc-line);background:transparent;color:var(--hkc-txt);font:inherit;font-size:.78rem;padding:8px 0;cursor:pointer}
+.gs button:last-child{border-right:0}
+.gs button.on{background:var(--hkc-acc);color:#fff;font-weight:700}
+.hkc-panel.fsz .hkc-tape,.hkc-panel.fsz.tl .hkc-tape{flex:1 1 0;height:auto;min-height:0}
+.hx{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:4px}
+.hx button{border:1px solid var(--hkc-line);background:transparent;color:var(--hkc-acc);border-radius:10px;padding:4px 0;font:inherit;font-weight:700;cursor:pointer}
+.hx button:active{background:var(--hkc-hl)}
+/* ਤਾਰੀਖ ਪਿਕਰ (ਉੱਪਰ-ਥੱਲੇ ਸਕ੍ਰੋਲ ਵਾਲੇ ਪਹੀਏ) */
+.tl-body .ag-r .dt-b{border:0;background:transparent;color:var(--hkc-txt);font:inherit;font-size:.82rem;font-weight:700;padding:2px;cursor:pointer;text-align:right}
+.tl-body .ag-r .dt-b.o{color:var(--hkc-acc)}
+.dw{position:relative;display:flex;height:180px;margin:4px 0}
+.dw-c{flex:1;min-width:0;height:180px;overflow-y:auto;box-sizing:border-box;padding:72px 0;scroll-padding:72px 0;scroll-snap-type:y mandatory;overscroll-behavior:contain;touch-action:pan-y;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.dw-c::-webkit-scrollbar{display:none}
+.dw-c div{height:36px;line-height:36px;text-align:center;scroll-snap-align:start;color:var(--hkc-mut);font-size:.95rem;cursor:pointer;white-space:nowrap}
+.dw-c div.sel{color:var(--hkc-acc);font-size:1.15rem;font-weight:700}
+.dw-band{position:absolute;left:0;right:0;top:72px;height:36px;border-radius:10px;background:var(--hkc-hl);pointer-events:none}
+.dt-bt{display:flex;gap:6px}.dt-bt .tl-cn{flex:1}
+.dt-bt .dt-ok{background:var(--hkc-acc);color:#fff;font-weight:700}
+/* ਟੂਲ ਖੁੱਲ੍ਹਣ 'ਤੇ ਕੈਲਕੁਲੇਟਰ ਦਾ ਟੋਟਲ ਤੇ powered by ਨਹੀਂ ਦਿਸਣਗੇ; ਕੀਪੈਡ ਤੋਂ ਬਿਨਾਂ ਵਾਲੇ ਟੂਲ ਵਿੱਚ ਕੀਪੈਡ ਵੀ ਲੁਕਦਾ ਹੈ */
+.hkc-panel.tl:not(.tout) .hkc-total,.hkc-panel.tl:not(.tout) .hkc-pw{visibility:hidden}
+.hkc-panel.tl:not(.tlk):not(.tout) .hkc-keys{visibility:hidden}
+/* ਬਟਨ ਦਬਾਉਣ 'ਤੇ ਸਿਰਫ਼ ਗੋਲ-ਕੋਨੇ ਵਾਲੀ ਚਮਕ ਦਿਸੇ: ਬ੍ਰਾਊਜ਼ਰ ਦੀ ਚੋਰਸ ਟੈਪ-ਹਾਈਲਾਈਟ ਤੇ ਫੋਕਸ ਡੱਬਾ ਬੰਦ */
+.hkc-panel,.hkc-panel *{-webkit-tap-highlight-color:transparent}
+.hkc-panel button,.hkc-panel button:focus,.hkc-panel button:focus-visible,.hkc-panel input:focus{outline:0}
+.hkc-panel .hkc-k.eq:active{background:transparent}
+.hkc-panel .hkc-k.eq:active::before{filter:brightness(.85)}
+
+/* ===== ਪੂਰੀ ਸਕ੍ਰੀਨ ਦਿੱਖ: ਹਿਸਟਰੀ ਉੱਪਰ, ਬਟਨ ਸਕ੍ਰੀਨ ਦੇ ਅੱਧ ਤੋਂ ਹੇਠਾਂ ਤੱਕ, ਟੂਲ ਪੂਰੀ ਸਕ੍ਰੀਨ 'ਤੇ ===== */
+.hkc-panel.fsz{border-radius:0}
+.hkc-panel.fsz::before{border:0;border-radius:0;box-shadow:none;opacity:1} /* ਪੂਰੀ ਸਕ੍ਰੀਨ: ਠੋਸ ਪਿਛੋਕੜ */
+.hkc-panel.fsz .hkc-expr{height:64px;font-size:1.8rem}
+.hkc-panel.fsz .hkc-total{height:52px;font-size:2.7rem;line-height:1.2}
+.hkc-panel.fsz .hkc-row .e{font-size:.95rem;line-height:1.25}
+.hkc-panel.fsz .hkc-row .r{font-size:1.1rem;line-height:1.2}
+.hkc-panel.fsz .hkc-keys{flex:0 0 38%;grid-auto-rows:1fr;gap:0 2px;margin-top:6px}
+.hkc-panel.fsz .hkc-k{font-size:1.7rem;border-radius:20px}
+.hkc-panel.fsz .hkc-k.op,.hkc-panel.fsz .hkc-k.fn,.hkc-panel.fsz .hkc-k.eq{font-size:2rem}
+.hkc-panel.fsz .hkc-k.eq{margin-top:0}
+.hkc-panel.fsz .hkc-k.eq::before{width:42px;height:42px;margin:-21px 0 0 -21px}
+.hkc-panel.fsz #hkcFs{width:52px;height:42px}
+.hkc-panel.fsz #hkcFs svg{width:28px;height:28px;stroke-width:1.6}
+.hkc-panel.fsz .hkc-fx{width:72px;height:42px}
+.hkc-panel.fsz .hkc-fx svg{width:30px;height:30px}
+.hkc-panel.fsz .hkc-sk{font-size:1.15rem}
+.hkc-panel.fsz .tl-grid{grid-auto-rows:minmax(104px,1fr);align-content:stretch}
+.hkc-panel.fsz .tl-t{justify-content:center;gap:8px;font-size:.85rem}
+.hkc-panel.fsz .tl-t b svg{width:50px;height:50px}
+.hkc-panel.fsz .tl-t b{font-size:2.2rem}
+
+  #edLiveDate { cursor: pointer; padding: 7px 12px; margin: -7px -12px; border-radius: 12px; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+  #edLiveDate:active { background: rgba(16,185,129,0.18); }
+
+  /* perf: ਹਿਸਾਬ-ਕਿਤਾਬ ਖੁੱਲ੍ਹਣ ਵੇਲੇ ਪਿੱਛੇ ਵਾਲੀ ਐਪ ਨਹੀਂ ਬਣਾਈ ਜਾਂਦੀ */
+  html.hk-open.hk-full body > *:not(#hisabView):not(.hkc-panel):not(script):not(style) { visibility: hidden !important; }
+</style></head><body>
+<!--
+  ਵਰਤੋਂ ਦੀ ਵਿਧੀ (ਕਿਸੇ ਹੋਰ ਪੇਜ ਵਿੱਚ ਕਾਪੀ ਕਰਨ ਲਈ):
+  1. ਪਹਿਲੇ <style> ਵਿੱਚ ਦਾ ਸਾਰਾ CSS ਆਪਣੇ <style> ਵਿੱਚ ਪਾਓ (ਦੂਜਾ <style> ਬਲਾਕ)।
+  2. "NOTE CALCULATOR" ਵਾਲਾ div ਆਪਣੇ <body> ਵਿੱਚ ਪਾਓ।
+  3. ਹੇਠਲੀ <script> ਵੀ ਪਾਓ।
+  4. ਕੈਲਕੁਲੇਟਰ ਖੋਲ੍ਹਣ/ਬੰਦ ਕਰਨ ਲਈ ਕਿਸੇ ਵੀ ਚੀਜ਼ 'ਤੇ onclick="ntCalcToggle()" ਲਗਾਓ।
+     ਹੋਰ ਫੰਕਸ਼ਨ: ntCalcClose(), ntCalcIsOpen()
+  ਸਥਿਤੀ localStorage ਵਿੱਚ 'nt_calc_state_v1' ਨਾਂ ਹੇਠ ਸੇਵ ਹੁੰਦੀ ਹੈ।
+-->
+<!-- ===== NOTE CALCULATOR ===== -->
+<div class="hkc-panel" id="hkcPanel">
+    <div class="hkc-head">
+      <button type="button" class="hkc-hbtn" id="hkcFs" title="ਫੁੱਲ ਸਕ੍ਰੀਨ / ਛੋਟਾ"></button>
+      <div class="hkc-op" title="ਪਾਰਦਰਸ਼ੀ ↔ ਠੋਸ"><div class="hkc-sl" id="hkcSl"><div class="trk"></div><div class="thb"></div></div><b id="hkcTr">15%</b></div>
+      <button type="button" class="hkc-hbtn" id="hkcClose" title="ਬੰਦ ਕਰੋ">✕</button>
+    </div>
+    <div class="hkc-tape" id="hkcTape"></div>
+    <div class="hkc-sci" id="hkcSci"><button type="button" class="hkc-sk" data-k="x:2nd">2nd</button><button type="button" class="hkc-sk" data-k="x:(">(</button><button type="button" class="hkc-sk" data-k="x:)">)</button><button type="button" class="hkc-sk" data-k="x:tenx">10<sup>x</sup></button><button type="button" class="hkc-sk mm" data-k="x:mc">mc</button><button type="button" class="hkc-sk" data-k="x:inv">1/x</button><button type="button" class="hkc-sk" data-k="x:sq">x<sup>2</sup></button><button type="button" class="hkc-sk" data-k="x:cu">x<sup>3</sup></button><button type="button" class="hkc-sk" data-k="x:pow">y<sup>x</sup></button><button type="button" class="hkc-sk mm" data-k="x:madd">m+</button><button type="button" class="hkc-sk" data-k="x:fact">x!</button><button type="button" class="hkc-sk" data-k="x:sqrt">√</button><button type="button" class="hkc-sk" data-k="x:root"><sup>x</sup>√y</button><button type="button" class="hkc-sk" data-k="x:lg">lg</button><button type="button" class="hkc-sk mm" data-k="x:msub">m−</button><button type="button" class="hkc-sk" data-k="x:sin">sin</button><button type="button" class="hkc-sk" data-k="x:cos">cos</button><button type="button" class="hkc-sk" data-k="x:tan">tan</button><button type="button" class="hkc-sk" data-k="x:ln">ln</button><button type="button" class="hkc-sk mm" data-k="x:mr">mr</button><button type="button" class="hkc-sk" data-k="x:sinh">sinh</button><button type="button" class="hkc-sk" data-k="x:cosh">cosh</button><button type="button" class="hkc-sk" data-k="x:tanh">tanh</button><button type="button" class="hkc-sk" data-k="x:ex">e<sup>x</sup></button><button type="button" class="hkc-sk" data-k="x:neg">+/−</button><button type="button" class="hkc-sk" data-k="x:dr">Deg</button><button type="button" class="hkc-sk" data-k="x:pi">π</button><button type="button" class="hkc-sk" data-k="x:ee">EE</button><button type="button" class="hkc-sk" data-k="x:rand">Rand</button><button type="button" class="hkc-sk" data-k="x:e">e</button></div>
+    <div class="hkc-main"><div class="hkc-expr" id="hkcExpr">0</div><div class="hkc-total" id="hkcTotal"></div></div>
+    <div class="hkc-pw">powered by: Ashu Mann</div>
+    <div class="hkc-keys"><button type="button" class="hkc-k fn" data-k="C">C</button><button type="button" class="hkc-k fn" data-k="B">⌫</button><button type="button" class="hkc-k fn" data-k="%">%</button><button type="button" class="hkc-k op" data-k="÷">÷</button><button type="button" class="hkc-k " data-k="7">7</button><button type="button" class="hkc-k " data-k="8">8</button><button type="button" class="hkc-k " data-k="9">9</button><button type="button" class="hkc-k op" data-k="×">×</button><button type="button" class="hkc-k " data-k="4">4</button><button type="button" class="hkc-k " data-k="5">5</button><button type="button" class="hkc-k " data-k="6">6</button><button type="button" class="hkc-k op" data-k="−">−</button><button type="button" class="hkc-k " data-k="1">1</button><button type="button" class="hkc-k " data-k="2">2</button><button type="button" class="hkc-k " data-k="3">3</button><button type="button" class="hkc-k op" data-k="+">+</button><button type="button" class="hkc-k " data-k="00">00</button><button type="button" class="hkc-k " data-k="0">0</button><button type="button" class="hkc-k " data-k=".">.</button><button type="button" class="hkc-k eq" data-k="=">=</button></div>
+    <div class="hkc-tools" id="hkcTools"></div>
+    <div class="hkc-grip bl" title="ਇੱਥੋਂ ਫੜ ਕੇ ਹਿਲਾਓ"><div class="hkc-dots"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+    <button type="button" class="hkc-fx" id="hkcFx" title="ਸਾਇੰਟੀਫ਼ਿਕ ਬਟਨ"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="9.5" width="8" height="8" rx="1.8"/><rect x="12.5" y="6.5" width="8" height="8" rx="1.8"/><path d="M6 6.5A5 5 0 0 1 10.5 4M18 17.5A5 5 0 0 1 13.5 20"/><path d="M10.5 4l-1.8-.2M10.5 4l-.4 1.8M13.5 20l1.8.2M13.5 20l.4-1.8"/></svg></button>
+    <div class="hkc-rz" title="ਆਕਾਰ ਬਦਲੋ"><svg viewBox="0 0 14 14"><path d="M12 5L5 12M12 9L9 12"/></svg></div>
+  </div>
+<script>
+(function(){
+  var KEY='nt_calc_state_v1', OPS='+−×÷^√', BASE_W=248;
+  var st={x:null,y:null,tr:15,s:1,open:false,hist:[]};
+  try{var sv=JSON.parse(localStorage.getItem(KEY)||'null'); if(sv&&typeof sv==='object') for(var k in sv) st[k]=sv[k];}catch(e){}
+  if(!Array.isArray(st.hist)) st.hist=[];
+  var mem=+st.mem||0, ang=(st.ang==='rad')?'rad':'deg'; /* ਮੈਮੋਰੀ (m+ m− mr) ਅਤੇ ਡਿਗਰੀ/ਰੇਡੀਅਨ */
+  st.open=false; /* ਹਿਸਾਬ-ਕਿਤਾਬ ਖੁੱਲ੍ਹਣ 'ਤੇ ਕੈਲਕੁਲੇਟਰ ਹਮੇਸ਼ਾ ਬੰਦ */
+  var $=function(id){return document.getElementById(id)};
+  var panel=$('hkcPanel'), fab=document.createElement('button'), tape=$('hkcTape'), exprEl=$('hkcExpr'), totEl=$('hkcTotal'), slider=$('hkcOp'), trLbl=$('hkcTr');
+  if(!panel||!fab) return;
+  var expr='', done=false, hintTimer=0, hl=null, rawSub=null, rep=null; /* rawSub: = ਤੋਂ ਬਾਅਦ ਨਤੀਜੇ ਦਾ ਅਸਲ (ਬਿਨਾਂ ਗੋਲ) ਮੁੱਲ */
+  var pend=null, eqBtn=panel.querySelector('[data-k="="]');
+  function cancelPend(){
+    if(!pend) return;
+    if(pend.node) pend.node.classList.remove('sel');
+    pend=null; panel.classList.remove('pend'); if(eqBtn) eqBtn.textContent='=';
+  }
+  function selectAmt(node,v){
+    if(pend&&pend.node===node){ cancelPend(); return; }  /* ਉਹੀ ਰਕਮ ਦੁਬਾਰਾ ਛੂਹੋ = ਚੋਣ ਹਟਾਓ */
+    if(pend&&pend.node) pend.node.classList.remove('sel');
+    pend={node:node,v:v}; node.classList.add('sel');
+    panel.classList.add('pend'); if(eqBtn) eqBtn.textContent='✓';
+  }
+
+  var saveT=0;
+  function saveNow(){ clearTimeout(saveT); saveT=0; try{var q=(fs&&prev)?prev:st; localStorage.setItem(KEY,JSON.stringify({x:q.x,y:q.y,tr:st.tr,s:q.s,open:st.open,hist:st.hist.slice(-200),mem:mem,ang:ang}))}catch(e){} }
+  function save(){ clearTimeout(saveT); saveT=setTimeout(saveNow,1200); } /* ਲਿਖਣਾ ਬਾਅਦ 'ਚ, ਬਟਨ ਤੁਰੰਤ */
+  window.addEventListener('pagehide',saveNow);
+  document.addEventListener('visibilitychange',function(){ if(document.hidden) saveNow(); });
+  function buzz(){}
+
+  /* ---- ਹਿਸਾਬ (eval ਤੋਂ ਬਿਨਾਂ) ---- */
+  function isNumCh(c){return c!==undefined&&/[0-9.]/.test(c)}
+  /* ਫੰਕਸ਼ਨ ਟੋਕਨ (ਹਰ ਇੱਕ '(' ਨਾਲ ਖ਼ਤਮ) */
+  var FNS=['sinh⁻¹(','cosh⁻¹(','tanh⁻¹(','sin⁻¹(','cos⁻¹(','tan⁻¹(','sinh(','cosh(','tanh(','sin(','cos(','tan(','log₂(','lg(','ln(','√('];
+  /* ਹਿਸਾਬ: eval ਤੋਂ ਬਿਨਾਂ; + − × ÷ ^ x√y ! ( ) ਅਤੇ ਫੰਕਸ਼ਨ; 2π, 3(4+1) ਵਰਗਾ ਗੁਣਾ ਆਪਣੇ-ਆਪ */
+  function calc(s,raw){
+    if(rawSub&&s.indexOf(rawSub.t)===0&&!/[0-9.]/.test(s.charAt(rawSub.t.length))) s=rawSub.v+s.slice(rawSub.t.length);
+    var n=s.length, i=0, K=(ang==='rad')?1:Math.PI/180;
+    while(n>0&&OPS.indexOf(s[n-1])>=0) n--;
+    if(n===0) return null;
+    s=s.slice(0,n);
+    function fnAt(){ for(var k=0;k<FNS.length;k++) if(s.substr(i,FNS[k].length)===FNS[k]) return FNS[k]; return null; }
+    function opnd(){ var c=s[i]; return c!==undefined&&(/[0-9.]/.test(c)||c==='('||c==='π'||c==='e'||!!fnAt()); }
+    function num(){ var j=i; while(j<n&&/[0-9.]/.test(s[j])) j++; var v=parseFloat(s.slice(i,j)); if(isNaN(v)) throw 'syn'; i=j; return v; }
+    function fact(v){ if(v<0||v!==Math.floor(v)) throw 'dom'; if(v>170) throw 'ovf'; var r=1; for(var k=2;k<=v;k++) r*=k; return r; }
+    function pw(a,b){ if(a===0&&b<0) throw 'div0'; var r=Math.pow(a,b); if(r!==r) throw 'dom'; if(!isFinite(r)) throw 'ovf'; return r; }
+    function nroot(x,y){ if(x===0) throw 'div0'; if(y<0){ if(x===Math.floor(x)&&Math.abs(x%2)===1) return -Math.pow(-y,1/x); throw 'dom'; } return Math.pow(y,1/x); }
+    function zz(v){ return Math.abs(v)<1e-14?0:v; }
+    function fn(f,a){
+      switch(f){
+        case 'sin(': return zz(Math.sin(a*K));
+        case 'cos(': return zz(Math.cos(a*K));
+        case 'tan(': { var m=a*K; if(Math.abs(Math.cos(m))<1e-12) throw 'dom'; return zz(Math.tan(m)); }
+        case 'sin⁻¹(': if(a>1||a<-1) throw 'dom'; return Math.asin(a)/K;
+        case 'cos⁻¹(': if(a>1||a<-1) throw 'dom'; return Math.acos(a)/K;
+        case 'tan⁻¹(': return Math.atan(a)/K;
+        case 'sinh(': return Math.sinh(a);
+        case 'cosh(': return Math.cosh(a);
+        case 'tanh(': return Math.tanh(a);
+        case 'sinh⁻¹(': return Math.asinh(a);
+        case 'cosh⁻¹(': if(a<1) throw 'dom'; return Math.acosh(a);
+        case 'tanh⁻¹(': if(a<=-1||a>=1) throw 'dom'; return Math.atanh(a);
+        case 'ln(': if(a<=0) throw 'dom'; return Math.log(a);
+        case 'lg(': if(a<=0) throw 'dom'; return Math.log10(a);
+        case 'log₂(': if(a<=0) throw 'dom'; return Math.log2(a);
+        case '√(': if(a<0) throw 'dom'; return Math.sqrt(a);
+      }
+      throw 'syn';
+    }
+    function pExpr(){ var v=pTerm(); while(i<n&&(s[i]==='+'||s[i]==='−')){ var o=s[i++], r=pTerm(), pv=v; v=(o==='+')?v+r:v-r; if(Math.abs(v)<1e-14*Math.max(Math.abs(pv),Math.abs(r))) v=0; } return v; }
+    function pTerm(){
+      var v=pUnary();
+      for(;;){
+        var c=s[i];
+        if(c==='×'||c==='÷'){ i++; var r=pUnary(); if(c==='÷'){ if(r===0) throw 'div0'; v=v/r; } else v=v*r; }
+        else if(opnd()) v=v*pUnary();
+        else break;
+      }
+      return v;
+    }
+    function pUnary(){ if(s[i]==='−'){ i++; return -pUnary(); } if(s[i]==='+'){ i++; return pUnary(); } return pPower(); }
+    function pPower(){
+      var b=pPost();
+      while(s[i]==='√'){ i++; b=nroot(b,pPost()); }
+      if(s[i]==='^'){ i++; return pw(b,pUnary()); }
+      return b;
+    }
+    function pPost(){ var v=pPrim(); while(s[i]==='!'){ i++; v=fact(v); } return v; }
+    function pPrim(){
+      var c=s[i];
+      if(c===undefined) throw 'inc';
+      if(/[0-9.]/.test(c)) return num();
+      if(c==='π'){ i++; return Math.PI; }
+      if(c==='e'){ i++; return Math.E; }
+      if(c==='('){ i++; var v=pExpr(); if(s[i]===')') i++; else if(i<n) throw 'syn'; return v; }
+      var f=fnAt();
+      if(f){ i+=f.length; var a=pExpr(); if(s[i]===')') i++; else if(i<n) throw 'syn'; return fn(f,a); }
+      throw 'syn';
+    }
+    var r;
+    try{ r=pExpr(); if(i<n) throw 'syn'; }
+    catch(e){ if(e==='inc'||e==='syn') return null; throw e; }
+    if(r!==r||!isFinite(r)) throw 'ovf';
+    if(raw) return r;
+    return Math.abs(r)<1e15?+r.toPrecision(15):r;
+  }
+  function grp(str){
+    var neg=str[0]==='-'||str[0]==='−'; if(neg) str=str.slice(1);
+    var p=str.split('.'), ip=p[0]||'0';
+    var last=ip.slice(-3), rest=ip.slice(0,-3);
+    if(rest) rest=rest.replace(/\B(?=(\d{2})+(?!\d))/g,',')+',';
+    var out=rest+last; if(p.length>1) out+='.'+p[1];
+    return (neg?'−':'')+out;
+  }
+  function fmtNum(v){
+    var a=Math.abs(v);
+    if(a!==0&&(a>=1e15||a<1e-6)) return v.toExponential(9).replace(/\.?0+e/,'e').replace('e+','E').replace('e-','E−').replace('-','−');
+    return grp(String(v).replace('-','−'));
+  }
+  /* ਸੰਖਿਆ ਨੂੰ ਅਜਿਹੇ ਲਿਖਤ ਰੂਪ ਵਿੱਚ ਜੋ ਦੁਬਾਰਾ ਹਿਸਾਬ ਵਿੱਚ ਪੜ੍ਹਿਆ ਜਾ ਸਕੇ (e+25 ਵਰਗਾ ਨਹੀਂ) */
+  function numStr(v){
+    var neg=v<0, a=Math.abs(v), t;
+    if(a>=1e21||(a!==0&&a<1e-6)){
+      var ex=Math.floor(Math.log10(a)), m=+(ex<0?a*Math.pow(10,-ex):a/Math.pow(10,ex)).toPrecision(15);
+      if(m>=10){ m/=10; ex++; } else if(m<1){ m*=10; ex--; }
+      t='('+(+m.toPrecision(15))+'×10^'+(ex<0?'−'+(-ex):ex)+')';
+    }
+    else t=String(a);
+    return (neg?'−':'')+t;
+  }
+  function closeP(e){ var o=(e.match(/\(/g)||[]).length, c=(e.match(/\)/g)||[]).length; for(var k=c;k<o;k++) e+=')'; return e; }
+  function fmtExpr(s){return s.replace(/[0-9.]+/g,function(m){var p=m.split('.');var ip=p[0]===''?'0':p[0];return grp(ip)+(p.length>1?'.'+p[1]:'')})}
+  function lastCh(){return expr.slice(-1)}
+  function armed(){ return expr!==''&&OPS.indexOf(lastCh())>=0; }
+
+  function fitTotal(){
+    totEl.style.fontSize='';
+    var fs=parseFloat(getComputedStyle(totEl).fontSize)||30, w=totEl.scrollWidth, c=totEl.clientWidth;
+    if(w>c+1&&c>0){ fs=Math.max(10,Math.floor(fs*c/w)); totEl.style.fontSize=fs+'px'; }
+    while(totEl.scrollWidth>totEl.clientWidth+1&&fs>10){ fs-=1; totEl.style.fontSize=fs+'px'; }
+  }
+  /* ਤੇਜ਼ ਟੈਪਾਂ 'ਤੇ ਮਾਪ-ਤੋਲ ਵਾਲਾ ਭਾਰੀ ਕੰਮ ਇੱਕ ਫ਼ਰੇਮ ਵਿੱਚ ਇੱਕ ਵਾਰ */
+  var fitRaf=0;
+  function fitSoon(){ if(fitRaf) return; fitRaf=requestAnimationFrame(function(){ fitRaf=0; exprEl.scrollTop=exprEl.scrollHeight; fitTotal(); }); }
+  function render(){
+    var eh=(hl&&hl.e<=expr.length)?fmtExpr(expr.slice(0,hl.s))+'<span class="hkc-sel">'+fmtExpr(expr.slice(hl.s,hl.e))+'</span>'+fmtExpr(expr.slice(hl.e)):(fmtExpr(expr)||'0');
+    exprEl.innerHTML='<span class="ex">'+eh+'</span>';
+    var r=null,err=null;
+    try{ r=calc(expr); }catch(e){ err=String(e); }
+    totEl.classList.remove('hint');
+    totEl.classList.toggle('err',!!err);
+    totEl.textContent = err ? (err==='div0'?'ਸਿਫ਼ਰ ਨਾਲ ਭਾਗ ਨਹੀਂ ਹੋ ਸਕਦਾ':err==='ovf'?'ਨਤੀਜਾ ਬਹੁਤ ਵੱਡਾ ਹੈ':'ਗਲਤ ਇਨਪੁੱਟ') : (r===null ? '' : '= '+fmtNum(r));
+    fitSoon();
+  }
+  function hint(msg){
+    totEl.classList.remove('err'); totEl.classList.add('hint'); totEl.textContent=msg;
+    clearTimeout(hintTimer); hintTimer=setTimeout(render,2200);
+  }
+
+  /* ---- ਪੁਰਾਣੀਆਂ ਐਂਟਰੀਆਂ ---- */
+  function rowEl(h){
+    var row=document.createElement('div'); row.className='hkc-row';
+    var e=document.createElement('div'); e.className='e';
+    var src=h.e, last=0, re=/[0-9.]+/g, mm;
+    while((mm=re.exec(src))){
+      if(mm.index>last) e.appendChild(document.createTextNode(src.slice(last,mm.index)));
+      var sp=document.createElement('span'); sp.className='n';
+      var p=mm[0].split('.');
+      sp.textContent=grp(p[0]===''?'0':p[0])+(p.length>1?'.'+p[1]:'');
+      var neg=src[mm.index-1]==='−'&&(mm.index-1===0||OPS.indexOf(src[mm.index-2])>=0||src[mm.index-2]==='(');
+      sp.setAttribute('data-v',(neg?'-':'')+mm[0]);
+      e.appendChild(sp); last=re.lastIndex;
+    }
+    if(last<src.length) e.appendChild(document.createTextNode(src.slice(last)));
+    var r=document.createElement('div'); r.className='r';
+    var rs=document.createElement('span'); rs.className='n'; rs.textContent='= '+fmtNum(h.r); rs.setAttribute('data-v',String(h.w!==undefined?h.w:h.r));
+    r.appendChild(rs);
+    row.appendChild(e); row.appendChild(r);
+    var sx=0, sy=0, tracking=false;
+    function doAdd(target){
+      var n=target&&target.closest?target.closest('[data-v]'):null;
+      if(!n) return;
+      var v=parseFloat(n.getAttribute('data-v'));
+      if(isNaN(v)) return;
+      selectAmt(n,v);
+    }
+    /* ਐਂਟਰੀ ਦੀ ਕੋਈ ਵੀ ਰਕਮ (ਜਾਂ ਨਤੀਜਾ) ਛੂਹੋ = ਉਹੀ ਰਕਮ ਆਖਰੀ ਦਬਾਏ ਨਿਸ਼ਾਨ (+ − × ÷) ਨਾਲ ਜੁੜ ਜਾਂਦੀ ਹੈ; ਨਿਸ਼ਾਨ ਨਾ ਹੋਵੇ ਤਾਂ + */
+    row.addEventListener('pointerdown',function(ev){ tracking=true; sx=ev.clientX; sy=ev.clientY; });
+    row.addEventListener('pointerup',function(ev){
+      if(!tracking) return; tracking=false;
+      if(Math.hypot(ev.clientX-sx,ev.clientY-sy)<14) doAdd(ev.target);
+    });
+    row.addEventListener('pointercancel',function(){ tracking=false; });
+    row.addEventListener('click',function(ev){ if(ev.detail===0) doAdd(ev.target); });
+    return row;
+  }
+  function renderTape(){
+    cancelPend();
+    tape.innerHTML='';
+    if(!st.hist.length) return;
+    var frag=document.createDocumentFragment();
+    st.hist.forEach(function(h){ frag.appendChild(rowEl(h)); });
+    tape.appendChild(frag);
+    tape.scrollTop=tape.scrollHeight;
+  }
+  function appendTape(h){
+    if(st.hist.length===1){ renderTape(); return; }
+    tape.appendChild(rowEl(h));
+    while(tape.children.length>200) tape.removeChild(tape.firstChild);
+    tape.scrollTop=tape.scrollHeight;
+  }
+
+  /* ---- ਇਨਪੁੱਟ ---- */
+  function segment(){var m=expr.match(/[0-9.]*$/);return m?m[0]:''}
+  function digit(d){
+    if(done){expr='';done=false}
+    var seg=segment();
+    if(d==='00'&&seg==='') d='0';
+    if(seg==='0'&&d!=='.'){ if(d==='0'||d==='00') return; expr=expr.slice(0,-1); }
+    if(seg.length>=15) return;
+    expr+=d; render();
+  }
+  function dot(){
+    if(done){expr='';done=false}
+    var seg=segment();
+    if(seg.indexOf('.')>=0) return;
+    expr+= seg===''?'0.':'.'; render();
+  }
+  function oper(o){
+    done=false;
+    if(expr===''){ if(o==='−') expr='−'; render(); return; }
+    var l=lastCh();
+    if(expr==='−') return;
+    if((o==='^'||o==='√')&&!isOpEnd()&&OPS.indexOf(l)<0) return;
+    if(OPS.indexOf(l)>=0){
+      if(o==='−'&&(l==='×'||l==='÷'||l==='^')){ expr+='−'; }
+      else{
+        expr=expr.slice(0,-1);
+        if(OPS.indexOf(lastCh())>=0&&expr.length>1) expr=expr.slice(0,-1);
+        if(expr===''||lastCh()==='('){ render(); return; }
+        expr+=o;
+      }
+    } else if(l==='('){ if(o==='−') expr+=o; }
+    else expr+=o;
+    render();
+  }
+  function addValue(v){
+    done=false;
+    var neg=v<0, s=String(Math.abs(v));
+    if(/e/i.test(s)) s=numStr(Math.abs(v));
+    var l=lastCh();
+    if(expr===''||l===''){ expr=(neg?'−':'')+s; }
+    else if(OPS.indexOf(l)>=0){
+      if(neg){
+        if(l==='+') expr=expr.slice(0,-1)+'−'+s;
+        else if(l==='−') expr=expr.slice(0,-1)+'+'+s;
+        else expr+='−'+s;
+      } else expr+=s;
+    } else if(l==='('){ expr+=(neg?'−':'')+s; } else expr+=(neg?'−':'+')+s;
+    hl={s:expr.length-s.length,e:expr.length};
+    render();
+  }
+  function pct(){
+    if(done) done=false;
+    var seg=segment(); if(seg===''||seg==='.') return;
+    var pre=expr.slice(0,expr.length-seg.length), x=parseFloat(seg), v=x/100, pl=pre.slice(-1);
+    /* 200+10% = 220: + ਜਾਂ − ਤੋਂ ਬਾਅਦ % ਪਿਛਲੇ ਹਿਸਾਬ ਦਾ ਪ੍ਰਤੀਸ਼ਤ ਹੁੰਦਾ ਹੈ */
+    if((pl==='+'||pl==='−')&&(pre.match(/\(/g)||[]).length===(pre.match(/\)/g)||[]).length){
+      var bs=null; try{ bs=calc(pre.slice(0,-1)); }catch(e){}
+      if(bs!==null&&bs!==undefined) v=bs*x/100;
+    }
+    expr=pre+numStr(+v.toPrecision(15)); render();
+  }
+  function back(){ if(done){expr='';done=false;render();return} var L=1; for(var k=0;k<FNS.length;k++){ if(expr.slice(-FNS[k].length)===FNS[k]){ L=FNS[k].length; break; } } expr=expr.slice(0,expr.length-L); render(); }
+  function clr(){
+    cancelPend(); hl=null; rawSub=null; rep=null;
+    if(expr!==''){ expr=''; done=false; render(); return; }
+    if(st.hist.length){ st.hist=[]; renderTape(); save(); done=false; render(); hint('ਹਿਸਟਰੀ ਸਾਫ਼'); return; }
+    done=false; render();
+  }
+  function equals(){
+    if(done){ if(rep){ expr=expr+rep.o+rep.n; done=false; } else return; }
+    var r; try{ r=calc(expr); }catch(e){ render(); return; }
+    if(r===null){ if(expr!=='') hint('ਹਿਸਾਬ ਪੂਰਾ ਨਹੀਂ ਹੈ'); return; }
+    var w=r; try{ w=calc(expr,true); }catch(e){}
+    var e=expr; while(OPS.indexOf(e.slice(-1))>=0) e=e.slice(0,-1); e=closeP(e);
+    var mr=e.match(/[0-9.)]([+−×÷])([0-9.]+)$/); rep=mr?{o:mr[1],n:mr[2]}:null;
+    st.hist.push({e:e,r:r,w:w}); if(st.hist.length>200) st.hist.shift();
+    expr=numStr(r); rawSub={t:expr,v:numStr(w)}; done=true;
+    appendTape(st.hist[st.hist.length-1]); render(); save();
+  }
+
+  /* ---- ਬਟਨ: ਛੂਹਦੇ ਹੀ ਤੁਰੰਤ ਚੱਲਦੇ ਹਨ (click ਦੀ ਉਡੀਕ ਨਹੀਂ) ---- */
+  function press(k){
+    if(k.charAt(0)==='x'&&k.charAt(1)===':'){ if(tOn) return; cancelPend(); hl=null; sciKey(k.slice(2)); buzz(); return; }
+    if(tOn){ toolKey(k); return; }
+    if(pend){
+      if(k==='='){ var pv=pend.v; cancelPend(); addValue(pv); return; }
+      cancelPend();
+    }
+    hl=null;
+    if(/^[0-9]+$/.test(k)) digit(k);
+    else if(k==='.') dot();
+    else if(k==='C') clr();
+    else if(k==='B') back();
+    else if(k==='%') pct();
+    else if(k==='=') equals();
+    else oper(k);
+    buzz();
+  }
+  panel.querySelectorAll('[data-k]').forEach(function(b){
+    var k=b.getAttribute('data-k');
+    /* ਬਟਨ ਹੁਣ ਛੱਡਣ 'ਤੇ ਚੱਲਦਾ ਹੈ, ਪਰ ਸਿਰਫ਼ ਟੈਪ ਹੋਵੇ ਤਾਂ; ਸਵਾਈਪ ਕਰਨ 'ਤੇ ਬਟਨ ਨਹੀਂ ਦੱਬਦਾ */
+    var bd=null;
+    b.addEventListener('pointerdown',function(e){
+      if(e.pointerType==='mouse'&&e.button!==0) return;
+      e.preventDefault(); bd={x:e.clientX,y:e.clientY,id:e.pointerId};
+      try{ b.setPointerCapture(e.pointerId); }catch(_){}
+    });
+    b.addEventListener('pointerup',function(e){
+      if(!bd||bd.id!==e.pointerId) return; var d=bd; bd=null;
+      if(Math.hypot(e.clientX-d.x,e.clientY-d.y)<18) press(k);
+    });
+    b.addEventListener('pointercancel',function(){ bd=null; });
+    /* ਛੂਹ/ਮਾਊਸ ਤੋਂ ਬਾਅਦ ਆਉਣ ਵਾਲਾ click ਅਣਡਿੱਠਾ (detail>0); ਸਿਰਫ਼ ਕੀਬੋਰਡ (detail=0) ਚੱਲੇਗਾ */
+    b.addEventListener('click',function(e){ e.preventDefault(); if(e.detail===0) press(k); });
+  });
+  $('hkcClose').addEventListener('click',function(e){ e.stopPropagation(); setOpen(false); });
+  fab.addEventListener('click',function(){ buzz(); setOpen(!st.open); });
+
+
+  /* ================= ਸਾਇੰਟੀਫ਼ਿਕ ਬਟਨ (fx) ================= */
+  var sec=false, fxB=$('hkcFx');
+  var SECL={sin:['sin','sin⁻¹'],cos:['cos','cos⁻¹'],tan:['tan','tan⁻¹'],sinh:['sinh','sinh⁻¹'],cosh:['cosh','cosh⁻¹'],tanh:['tanh','tanh⁻¹'],tenx:['10<sup>x</sup>','2<sup>x</sup>'],lg:['lg','log₂']};
+  function skey(c){ return panel.querySelector('[data-k="x:'+c+'"]'); }
+  function secUpd(){
+    for(var c in SECL){ var b=skey(c); if(b) b.innerHTML=SECL[c][sec?1:0]; }
+    var b2=skey('2nd'); if(b2) b2.classList.toggle('on',sec);
+  }
+  function drUpd(){ var b=skey('dr'); if(b) b.textContent=(ang==='deg')?'Deg':'Rad'; }
+  function memUpd(){ var b=skey('mr'); if(b){ b.classList.toggle('mon',mem!==0); b.title=mem!==0?('M = '+fmtNum(mem)):''; } }
+  function sciOpen(o){
+    panel.classList.toggle('sci',o); fxB.classList.toggle('on',o);
+    if(o) cancelPend(); else tape.scrollTop=tape.scrollHeight;
+  }
+  fxB.addEventListener('click',function(e){ e.stopPropagation(); if(tOn) tClose(); sciOpen(!panel.classList.contains('sci')); });
+
+  function isOpEnd(){ return /[0-9.)!πe]$/.test(expr); }
+  /* ਅਖੀਰਲੀ ਰਕਮ (ਸੰਖਿਆ, π, e, ਬਰੈਕਟ ਵਾਲਾ ਹਿੱਸਾ ਜਾਂ ਫੰਕਸ਼ਨ, ਨਾਲ ਦੇ ^ ਸਮੇਤ) ਕਿੱਥੋਂ ਸ਼ੁਰੂ ਹੁੰਦੀ ਹੈ */
+  function opStart(str,wm){
+    var e=str.length; if(!e) return -1;
+    var c=str[e-1], st0;
+    if(c==='!'){ return opStart(str.slice(0,e-1),wm); }
+    if(c===')'){
+      var d=0, p=-1, q;
+      for(q=e-1;q>=0;q--){ if(str[q]===')') d++; else if(str[q]==='('){ d--; if(d===0){ p=q; break; } } }
+      if(p<0) return -1;
+      st0=p;
+      for(var k=0;k<FNS.length;k++){ var f=FNS[k]; if(str.slice(p+1-f.length,p+1)===f){ st0=p+1-f.length; break; } }
+    } else if(/[0-9.]/.test(c)){ var j=e; while(j>0&&/[0-9.]/.test(str[j-1])) j--; st0=j; }
+    else if(c==='π'||c==='e') st0=e-1;
+    else return -1;
+    while(st0>0&&(str[st0-1]==='^'||(str[st0-1]==='√'&&st0>1&&/[0-9.)!πe]/.test(str[st0-2])))){
+      var q2=opStart(str.slice(0,st0-1),wm); if(q2<0) break; st0=q2;
+    }
+    if(wm&&st0>0&&str[st0-1]==='−'&&(st0===1||OPS.indexOf(str[st0-2])>=0||str[st0-2]==='(')) st0--;
+    return st0;
+  }
+  function needOp(){ hint('ਪਹਿਲਾਂ ਕੋਈ ਅੰਕ ਪਾਓ'); }
+  function wrapOp(pre,suf){
+    if(done){ expr=pre+expr+suf; done=false; return true; }
+    var s0=opStart(expr,true); if(s0<0) return false;
+    expr=expr.slice(0,s0)+pre+expr.slice(s0)+suf; return true;
+  }
+  function postPow(k){
+    if(done){ expr=(/^[0-9.]+$/.test(expr)?expr:'('+expr+')')+'^'+k; done=false; return true; }
+    var s0=opStart(expr,true); if(s0<0) return false;
+    var op=expr.slice(s0), wrap=(op.indexOf('^')>=0||op.indexOf('√')>=0||op[0]==='−');
+    expr=expr.slice(0,s0)+(wrap?'('+op+')':op)+'^'+k; return true;
+  }
+  function powBase(b){
+    if(done){ expr=b+'^('+expr+')'; done=false; return; }
+    var s0=opStart(expr,true);
+    if(s0>=0) expr=expr.slice(0,s0)+b+'^('+expr.slice(s0)+')'; else expr+=b+'^(';
+  }
+  function fnKey(tok){ if(done){ expr=tok+expr+')'; done=false; } else expr+=tok; }
+  function negate(){
+    if(done){ expr=(expr[0]==='−')?expr.slice(1):'−'+expr; done=false; return true; }
+    var s0=opStart(expr,false); if(s0<0) return false;
+    var b=expr.slice(0,s0), p=b.slice(-1), rest=expr.slice(s0);
+    if(p==='−'){ var pp=b.slice(-2,-1); expr=b.slice(0,-1)+((pp===''||OPS.indexOf(pp)>=0||pp==='(')?'':'+')+rest; }
+    else if(p==='+') expr=b.slice(0,-1)+'−'+rest;
+    else expr=b+'−'+rest;
+    return true;
+  }
+  function curVal(){ var r=null; try{ r=calc(expr); }catch(e){} return r; }
+  function sciKey(c){
+    var inv=sec;
+    switch(c){
+      case '2nd': sec=!sec; secUpd(); return;
+      case '(': if(done){ expr=''; done=false; } expr+='('; break;
+      case ')': { var o=(expr.match(/\(/g)||[]).length, cl=(expr.match(/\)/g)||[]).length; if(o>cl&&isOpEnd()) expr+=')'; else return; break; }
+      case 'pi': if(done){ expr=''; done=false; } expr+='π'; break;
+      case 'e': if(done){ expr=''; done=false; } expr+='e'; break;
+      case 'rand': { if(done){ expr=''; done=false; } var sg=segment(); if(sg!=='') expr=expr.slice(0,expr.length-sg.length); var rv=Math.random().toFixed(8).replace(/0+$/,''); if(rv.slice(-1)==='.') rv+='0'; expr+=rv; break; }
+      case 'dr': ang=(ang==='deg')?'rad':'deg'; drUpd(); save(); hint(ang==='deg'?'ਡਿਗਰੀ (Deg)':'ਰੇਡੀਅਨ (Rad)'); return;
+      case 'tenx': powBase(inv?'2':'10'); break;
+      case 'ex': powBase('e'); break;
+      case 'inv': if(!wrapOp('(1÷(','))')){ needOp(); return; } break;
+      case 'sq': if(!postPow(2)){ needOp(); return; } break;
+      case 'cu': if(!postPow(3)){ needOp(); return; } break;
+      case 'pow': if(!isOpEnd()){ needOp(); return; } oper('^'); return;
+      case 'root': if(!isOpEnd()){ needOp(); return; } oper('√'); return;
+      case 'fact': if(!isOpEnd()){ needOp(); return; } expr+='!'; done=false; break;
+      case 'sqrt': if(done){ expr='√('+expr+')'; done=false; } else { if(isOpEnd()) expr+='×'; expr+='√('; } break;
+      case 'lg': fnKey(inv?'log₂(':'lg('); break;
+      case 'ln': fnKey('ln('); break;
+      case 'sin': case 'cos': case 'tan': case 'sinh': case 'cosh': case 'tanh': fnKey(c+(inv?'⁻¹(':'(')); break;
+      case 'neg': if(!negate()){ needOp(); return; } break;
+      case 'ee': if(!isOpEnd()){ needOp(); return; } expr+='×10^'; done=false; break;
+      case 'mc': mem=0; memUpd(); save(); hint('ਮੈਮੋਰੀ ਸਾਫ਼ (M = 0)'); return;
+      case 'madd': case 'msub': {
+        var v=curVal(); if(v===null){ needOp(); return; }
+        mem=+(mem+(c==='madd'?v:-v)).toPrecision(15); memUpd(); save(); hint('M = '+fmtNum(mem)); return;
+      }
+      case 'mr': {
+        if(done){ expr=''; done=false; }
+        var sg2=segment(); if(sg2!=='') expr=expr.slice(0,expr.length-sg2.length);
+        var ms=numStr(mem); if(mem<0&&isOpEnd()) ms='('+ms+')';
+        expr+=ms; break;
+      }
+      default: return;
+    }
+    render();
+  }
+  secUpd(); drUpd(); memUpd();
+
+  /* ---- ਪਾਰਦਰਸ਼ਤਾ: 0% = ਠੋਸ, 100% = ਪੂਰੀ ਤਰ੍ਹਾਂ ਪਾਰਦਰਸ਼ੀ (ਆਪਣਾ ਸਲਾਈਡਰ) ---- */
+  var sl=$('hkcSl'), thb=sl.querySelector('.thb'), slId=null;
+  function applyTr(){
+    st.tr=Math.min(100,Math.max(0,Math.round(+st.tr||0)));
+    panel.style.setProperty('--cop',((100-st.tr)/100).toFixed(2));
+    thb.style.left=st.tr+'%'; trLbl.textContent=st.tr+'%';
+  }
+  var slRect=null, slRaf=0;
+  function slSet(e){
+    if(!slRect) slRect=sl.getBoundingClientRect();
+    if(!slRect.width) return;
+    st.tr=(e.clientX-slRect.left)/slRect.width*100;
+    if(!slRaf) slRaf=requestAnimationFrame(function(){ slRaf=0; applyTr(); });
+  }
+  sl.addEventListener('pointerdown',function(e){
+    slId=e.pointerId; slRect=null; try{sl.setPointerCapture(e.pointerId)}catch(_){}
+    slSet(e); e.preventDefault(); e.stopPropagation();
+  });
+  sl.addEventListener('pointermove',function(e){ if(slId===e.pointerId) slSet(e); });
+  function slEnd(e){ if(slId!==e.pointerId) return; slId=null; slRect=null; applyTr(); save(); }
+  sl.addEventListener('pointerup',slEnd);
+  sl.addEventListener('pointercancel',slEnd);
+  sl.addEventListener('lostpointercapture',slEnd);
+
+  /* ---- ਹਿਲਾਉਣਾ (ਹੈਡਰ/ਡਿਸਪਲੇ ਫੜ ਕੇ) ਅਤੇ ਆਕਾਰ (ਸਿਰਫ਼ ਹੇਠਲੇ ਸੱਜੇ ਕੋਨੇ ਤੋਂ) ---- */
+  function maxS(){ var h=PH||panel.offsetHeight||480; return Math.max(.5,Math.min(2.4,(window.innerWidth-8)/BASE_W,(window.innerHeight-8)/h)); }
+  function clampS(s){ return Math.min(maxS(),Math.max(.5,s)); }
+  function place(){ panel.style.transform='translate3d('+st.x+'px,'+st.y+'px,0) scale('+st.s+')'; }
+  var PW=0, PH=0;
+  function measure(){ PW=panel.offsetWidth; PH=panel.offsetHeight; }
+  function clampPos(){
+    if(!drag){ measure(); fitTotal(); }
+    var w=PW*st.s, h=PH*st.s, vw=window.innerWidth, vh=window.innerHeight;
+    var m=fs?0:4; /* ਪੂਰੀ ਸਕ੍ਰੀਨ ਵਿੱਚ ਕੋਈ ਹਾਸ਼ੀਆ ਨਹੀਂ */
+    st.x=Math.min(Math.max(m,st.x),Math.max(m,vw-w-m));
+    st.y=Math.min(Math.max(m,st.y),Math.max(m,vh-h-m));
+    place();
+  }
+  var drag=null, raf=0;
+  function schedule(){ if(!raf) raf=requestAnimationFrame(function(){ raf=0; clampPos(); }); }
+  function dragEnd(e){
+    if(!drag||(e&&e.pointerId!==drag.id)) return;
+    drag=null; panel.classList.remove('drag'); clampPos(); save();
+  }
+  panel.addEventListener('pointerdown',function(e){
+    if(e.pointerType==='mouse'&&e.button!==0) return;
+    var t=e.target, kind;
+    if(t.closest('.hkc-rz')){ kind='rz'; fsIcon(false); }
+    else if(t.closest('.hkc-grip')) kind='drag';
+    else return;
+    measure();
+    drag={id:e.pointerId,kind:kind,dx:e.clientX-st.x,dy:e.clientY-st.y,
+          offx:st.x+PW*st.s-e.clientX,offy:st.y+PH*st.s-e.clientY};
+    panel.classList.add('drag');
+    try{panel.setPointerCapture(e.pointerId)}catch(_){}
+    e.preventDefault();
+  });
+  panel.addEventListener('pointermove',function(e){
+    if(!drag||e.pointerId!==drag.id) return;
+    if(drag.kind==='drag'){ st.x=e.clientX-drag.dx; st.y=e.clientY-drag.dy; schedule(); return; }
+    var W=PW, H=PH;
+    var raw=((e.clientX+drag.offx-st.x)/W+(e.clientY+drag.offy-st.y)/H)/2;
+    var lim=Math.min(maxS(),(window.innerWidth-4-st.x)/W,(window.innerHeight-4-st.y)/H);
+    st.s=Math.max(.5,Math.min(lim,raw)); schedule(); return;
+  });
+  panel.addEventListener('pointerup',dragEnd);
+  panel.addEventListener('pointercancel',dragEnd);
+  panel.addEventListener('lostpointercapture',dragEnd);
+  window.addEventListener('resize',function(){ if(st.open){ st.s=clampS(st.s); clampPos(); } });
+
+  function setOpen(o){
+    st.open=!!o; if(!st.open){ tOn=false; clearTimeout(tTimer); T.classList.remove('on','in','out'); panel.classList.remove('tl','tin','tout'); } if(!st.open) cancelPend(); panel.classList.toggle('open',st.open); fab.classList.toggle('on',st.open);
+    if(!st.open){ drag=null; panel.classList.remove('drag'); }
+    if(st.open){
+      st.s=clampS(st.s);
+      if(st.x===null||st.y===null){ st.x=window.innerWidth-BASE_W*st.s-12; st.y=76; }
+      clampPos(); tape.scrollTop=tape.scrollHeight;
+    }
+    save();
+  }
+
+  /* ---- ਸੱਜੇ ਸਵਾਈਪ: ਟੂਲਸ ਵਿੰਡੋ (ਉਮਰ, ਖੇਤਰਫਲ, BMI ...) ---- */
+  var T=$('hkcTools'), body, upd=null, sw=null, act=null, fresh=false, tOn=false, tTimer=0;
+  /* ---- ਟੂਲ ਖੋਲ੍ਹਣ/ਬੰਦ: ਕੀਪੈਡ ਦਿਸਦਾ ਰਹਿੰਦਾ ਹੈ, ਟੂਲ ਸਿਰਫ਼ ਡਿਸਪਲੇ ਵਾਲੇ ਹਿੱਸੇ ਉੱਤੇ ---- */
+  function tlMode(on){
+    panel.classList.toggle('tl',on); measure();
+    if(fs) fsFit(); else st.s=clampS(st.s);
+    clampPos();
+    if(on) layoutT(false);
+    save();
+  }
+  /* k=true: ਕੀਪੈਡ ਦਿਸਦਾ ਰਹੇ (ਟੂਲ ਉੱਤੇ ਹੀ); k=false: ਟੂਲ ਪੂਰੇ ਕੈਲਕੁਲੇਟਰ ਨੂੰ ਢਕ ਲਵੇ */
+  function layoutT(k){ panel.classList.toggle('tlk',!!k);
+    if(k){ var kp=panel.querySelector('.hkc-keys'); T.style.bottom=(panel.offsetHeight-kp.offsetTop+3)+'px'; }
+    else T.style.bottom='40px';
+  }
+  /* ਜੰਪਿੰਗ ਸਵਾਈਪ: ਪੁਰਾਣਾ ਹਿੱਸਾ ਛੋਟਾ ਹੋ ਕੇ ਮੱਧਮ ਹੁੰਦਾ ਹੈ, ਨਵੀਂ ਸਕ੍ਰੀਨ ਸੱਜਿਓਂ ਉਛਲ ਕੇ ਆਉਂਦੀ ਹੈ */
+  function tOpen(){ clearTimeout(tTimer); tOn=true; T.classList.remove('out'); T.classList.add('on','in'); panel.classList.remove('tout'); panel.classList.add('tin'); tlMode(true); }
+  function tClose(){
+    if(!tOn) return; tOn=false;
+    T.classList.remove('in'); T.classList.add('out'); panel.classList.remove('tin'); panel.classList.add('tout');
+    tTimer=setTimeout(function(){ T.classList.remove('on','out'); panel.classList.remove('tout'); tlMode(false); },420);
+  }
+  function jump(dir){
+    var el=T.querySelector('.tl-grid,.tl-body'); if(!el||!dir) return;
+    el.style.setProperty('--jx',(dir*70)+'px'); el.style.animation='none'; void el.offsetWidth;
+    el.style.animation='tlJump .42s cubic-bezier(.2,.9,.25,1.1) both';
+  }
+  /* ---- ਟੂਲ ਦੇ ਖਾਨਿਆਂ ਵਿੱਚ ਕੈਲਕੁਲੇਟਰ ਦੇ ਆਪਣੇ ਬਟਨਾਂ ਨਾਲ ਲਿਖਣਾ ---- */
+  function numFields(){ return Array.prototype.filter.call(body.querySelectorAll('input'),function(i){return i.type!=='date'&&i.type!=='hidden'}); }
+  function setAct(el){
+    if(act) act.classList.remove('act','fresh');
+    act=el||null; fresh=true;
+    if(act) act.classList.add('act','fresh');
+  }
+  function prepFields(){
+    var f=numFields();
+    f.forEach(function(i){ i.readOnly=true; i.setAttribute('inputmode','none'); });
+    setAct(f[0]);
+  }
+  function toolKey(k){
+    if(!act||!T.querySelector('.tl-body')) return;
+    var v=act.value, ch=null;
+    if(/^[0-9]+$/.test(k)||k==='.') ch=k;
+    else if(/^H[A-F]$/.test(k)) ch=k[1];
+    if(ch!==null){
+      if(fresh) v='';
+      if(ch==='.'){ if(v.indexOf('.')>=0) return; v=(v===''||v==='-')?v+'0.':v+'.'; }
+      else {
+        if(v==='0'||v==='-0') v=v.slice(0,-1);
+        if(ch==='00'&&(v===''||v==='-')) ch='0';
+        if(v.replace('-','').length>=15) return;
+        v+=ch;
+      }
+    }
+    else if(k==='B') v=fresh?'':v.slice(0,-1);
+    else if(k==='C') v='';
+    else if(k==='−'){ if(act.hasAttribute('data-nosign')) return; v=v[0]==='-'?v.slice(1):'-'+v; }
+    else if(k==='='){ var f=numFields(), n=f.indexOf(act); setAct(f[(n+1)%f.length]); return; }
+    else return;
+    fresh=false; act.classList.remove('fresh');
+    act.value=v; if(upd) upd();
+  }
+  var p2=function(n){return (n<10?'0':'')+n}, TD=(function(d){return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate())})(new Date());
+  function nowTD(){ var d=new Date(); return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate()); }
+  var D=function(v){return v?new Date(v+'T00:00:00'):null}, fd=function(d){return p2(d.getDate())+'/'+p2(d.getMonth()+1)+'/'+d.getFullYear()};
+  var q=function(s){return body.querySelector(s)}, L=function(l,h){return '<label>'+l+'</label>'+h};
+  /* ---- ਤਾਰੀਖ ਪਿਕਰ: ਮਹੀਨਾ / ਦਿਨ / ਸਾਲ ਦੇ ਤਿੰਨ ਪਹੀਏ ---- */
+  var MN=['ਜਨਵਰੀ','ਫ਼ਰਵਰੀ','ਮਾਰਚ','ਅਪ੍ਰੈਲ','ਮਈ','ਜੂਨ','ਜੁਲਾਈ','ਅਗਸਤ','ਸਤੰਬਰ','ਅਕਤੂਬਰ','ਨਵੰਬਰ','ਦਸੰਬਰ'];
+  var IH=36;
+  function dtTxt(v){ var d=D(v); return d?d.getDate()+' '+MN[d.getMonth()]+' '+d.getFullYear():'ਤਾਰੀਖ ਚੁਣੋ'; }
+  function dtF(id,v,cls,full){ return '<input type=hidden id='+id+' value="'+v+'"><button type=button class="'+(full?'tl-sel ':'')+'dt-b'+(cls?' '+cls:'')+'" data-dt='+id+'>'+dtTxt(v)+(full?' ▾':'')+'</button>'; }
+  function dtTitle(btn){
+    var r=btn.closest('.ag-r'); if(r&&r.querySelector('span')) return r.querySelector('span').textContent;
+    var pe=btn.previousElementSibling; while(pe&&pe.tagName!=='LABEL') pe=pe.previousElementSibling;
+    return pe?pe.textContent:'ਤਾਰੀਖ ਚੁਣੋ';
+  }
+  function dtSheet(hid,btn){
+    var d0=D(hid.value)||D(TD), cur={y:d0.getFullYear(),m:d0.getMonth(),d:d0.getDate()}, tm={};
+    var o=document.createElement('div'); o.className='tl-sheet';
+    o.innerHTML='<div class="tl-bd"></div><div class="tl-sh"><div class="tl-st"></div><div class="dw"><div class="dw-c" data-w="m"></div><div class="dw-c" data-w="d"></div><div class="dw-c" data-w="y"></div><div class="dw-band"></div></div><div class="dt-bt"><button type="button" class="tl-cn">ਰੱਦ ਕਰੋ</button><button type="button" class="tl-cn dt-ok">ਠੀਕ ਹੈ</button></div></div>';
+    o.querySelector('.tl-st').textContent=dtTitle(btn);
+    var cols={m:o.querySelector('[data-w=m]'),d:o.querySelector('[data-w=d]'),y:o.querySelector('[data-w=y]')};
+    function items(w){
+      var a=[],i; if(w==='m') return MN;
+      if(w==='y'){ for(i=1900;i<=2100;i++) a.push(i); return a; }
+      var n=new Date(cur.y,cur.m+1,0).getDate(); for(i=1;i<=n;i++) a.push(i); return a;
+    }
+    function idxOf(w){ return w==='m'?cur.m:w==='y'?cur.y-1900:cur.d-1; }
+    function mark(w,i){ var c=cols[w], pv=c.querySelector('.sel'); if(pv) pv.classList.remove('sel'); var k=c.children[i]; if(k) k.classList.add('sel'); }
+    function fill(w){ var c=cols[w]; c.innerHTML=items(w).map(function(t){return '<div>'+t+'</div>'}).join(''); mark(w,idxOf(w)); c.scrollTop=idxOf(w)*IH; }
+    function fixDays(){ var n=new Date(cur.y,cur.m+1,0).getDate(); if(cols.d.children.length!==n){ if(cur.d>n) cur.d=n; fill('d'); } }
+    ['m','d','y'].forEach(function(w){
+      var c=cols[w];
+      c.addEventListener('scroll',function(){
+        var i=Math.max(0,Math.min(c.children.length-1,Math.round(c.scrollTop/IH))); mark(w,i);
+        if(w==='m') cur.m=i; else if(w==='y') cur.y=1900+i; else cur.d=i+1;
+        if(w!=='d'){ clearTimeout(tm[w]); tm[w]=setTimeout(fixDays,130); }
+      });
+      c.addEventListener('click',function(e){ var k=e.target; if(k.parentNode===c) c.scrollTo({top:Array.prototype.indexOf.call(c.children,k)*IH,behavior:'smooth'}); });
+    });
+    o.querySelector('.tl-bd').addEventListener('click',function(){ o.remove(); });
+    o.querySelector('.tl-cn').addEventListener('click',function(){ o.remove(); });
+    o.querySelector('.dt-ok').addEventListener('click',function(){
+      var dim=new Date(cur.y,cur.m+1,0).getDate(); if(cur.d>dim) cur.d=dim;
+      var iso=cur.y+'-'+p2(cur.m+1)+'-'+p2(cur.d);
+      hid.value=iso; btn.textContent=dtTxt(iso)+(btn.classList.contains('tl-sel')?' ▾':'');
+      hid.dispatchEvent(new Event('change',{bubbles:true})); o.remove();
+    });
+    T.appendChild(o);
+    fill('m'); fill('y'); fill('d');
+  }
+  T.addEventListener('click',function(e){ var b=e.target.closest&&e.target.closest('[data-dt]'); if(b&&body&&body.contains(b)) dtSheet(q('#'+b.getAttribute('data-dt')),b); });
+  function f(v){ if(!isFinite(v)) return '—'; var s=String(+v.toPrecision(12)); return /e/.test(s)?v.toExponential(6).replace(/\.?0+e/,'e'):grp(s); }
+  function ymd(a,b){ var t=(b.getFullYear()-a.getFullYear())*12+b.getMonth()-a.getMonth(); if(b.getDate()<a.getDate()) t--;
+    var ay=a.getFullYear()+Math.floor((a.getMonth()+t)/12), am=(a.getMonth()+t)%12, dim=new Date(ay,am+1,0).getDate();
+    var an=new Date(ay,am,Math.min(a.getDate(),dim)); return {y:Math.floor(t/12),m:t%12,d:Math.round((b-an)/864e5)}; }
+  function opts(l,s){ return l.map(function(u,i){return '<option value='+i+(i===s?' selected':'')+'>'+(u[0]||u)+'</option>'}).join(''); }
+  function cv(list,fn,tn,sa,sb){ /* ਆਮ ਕਨਵਰਟਰ: ਸੂਚੀ = [ਨਾਂ, ਅਧਾਰ ਇਕਾਈ ਵਿੱਚ ਗੁਣਕ] */
+    body.innerHTML=L('ਮੁੱਲ','<input id=v inputmode=decimal value=1>')+L('ਤੋਂ','<select id=a>'+opts(list,sa||0)+'</select>')+L('ਵਿੱਚ','<select id=b>'+opts(list,sb==null?1:sb)+'</select>')+'<div class=tl-res></div>';
+    upd=function(){ var v=parseFloat(q('#v').value), a=list[q('#a').value], b=list[q('#b').value], r;
+      if(fn){ r=fn.to(fn.from(v,q('#a').value),q('#b').value); } else r=v*a[1]/b[1];
+      q('.tl-res').textContent=isNaN(v)?'':f(r)+' '+b[0]; }; }
+  var CT={
+    area:[['ਵਰਗ ਕਿਲੋਮੀਟਰ km²',1e6],['ਹੈਕਟੇਅਰ ha',1e4],['ਏਅਰ a',100],['ਵਰਗ ਮੀਟਰ m²',1],['ਵਰਗ ਡੈਸੀਮੀਟਰ dm²',.01],['ਵਰਗ ਸੈਂਟੀਮੀਟਰ cm²',1e-4],['ਵਰਗ ਮਿਲੀਮੀਟਰ mm²',1e-6],['ਵਰਗ ਮਾਈਕਰੋਨ µm²',1e-12],
+      ['ਏਕੜ (ਕਿੱਲਾ) ac',4046.8564224],['ਵਰਗ ਮੀਲ mile²',2589988.110336],['ਵਰਗ ਗਜ਼ yd²',.83612736],['ਵਰਗ ਫੁੱਟ ft²',.09290304],['ਵਰਗ ਇੰਚ in²',.00064516],['ਵਰਗ ਰੌਡ rd²',25.29285264],
+      ['ਛਿੰਗ qing',1e6/15],['ਮੂ mu',1e4/15],['ਵਰਗ ਚੀ chi²',1/9],['ਵਰਗ ਚੁਨ cun²',1/900],['ਵਰਗ ਗੋਂਗਲੀ gongli²',1e6],
+      ['ਕਨਾਲ',20*25.29285264],['ਮਰਲਾ',25.29285264]],
+    data:[['ਬਿੱਟ',.125],['ਬਾਈਟ',1],['ਕਿਲੋਬਾਈਟ KB',1024],['ਮੈਗਾਬਾਈਟ MB',1048576],['ਗੀਗਾਬਾਈਟ GB',1073741824],['ਟੈਰਾਬਾਈਟ TB',1099511627776],['ਪੇਟਾਬਾਈਟ PB',1125899906842624]],
+    length:[['ਕਿਲੋਮੀਟਰ km',1000],['ਮੀਟਰ m',1],['ਡੈਸੀਮੀਟਰ dm',.1],['ਸੈਂਟੀਮੀਟਰ cm',.01],['ਮਿਲੀਮੀਟਰ mm',.001],['ਮਾਈਕਰੋਮੀਟਰ µm',1e-6],['ਨੈਨੋਮੀਟਰ nm',1e-9],['ਪਿਕੋਮੀਟਰ pm',1e-12],
+      ['ਸਮੁੰਦਰੀ ਮੀਲ nmi',1852],['ਮੀਲ mi',1609.344],['ਫਰਲਾਂਗ fur',201.168],['ਫੈਦਮ ftm',1.8288],['ਗਜ਼ yd',.9144],['ਫੁੱਟ ft',.3048],['ਇੰਚ in',.0254],
+      ['ਗੋਂਗਲੀ gongli',1000],['ਲੀ (ਦੂਰੀ) li',500],['ਝਾਂਗ zhang',10/3],['ਚੀ chi',1/3],['ਚੁਨ cun',1/30],['ਫੇਨ fen',1/300],['ਲੀ (ਛੋਟਾ) lii',1/3000],['ਹਾਓ hao',1/30000],
+      ['ਪਾਰਸੈਕ pc',3.0856775814913673e16],['ਚੰਦਰ ਦੂਰੀ ld',384400000],['ਖਗੋਲੀ ਇਕਾਈ ⊙',149597870700],['ਪ੍ਰਕਾਸ਼ ਸਾਲ ly',9460730472580800]],
+    mass:[['ਟਨ (ਮੀਟ੍ਰਿਕ) t',1000],['ਕਿਲੋਗ੍ਰਾਮ kg',1],['ਗ੍ਰਾਮ g',.001],['ਮਿਲੀਗ੍ਰਾਮ mg',1e-6],['ਮਾਈਕਰੋਗ੍ਰਾਮ µg',1e-9],['ਕੁਇੰਟਲ q',100],['ਪਾਊਂਡ lb',.45359237],['ਔਂਸ oz',.028349523125],
+      ['ਕੈਰਟ ct',.0002],['ਗ੍ਰੇਨ gr',.00006479891],['ਲੰਬਾ ਟਨ (UK) l.t',1016.0469088],['ਛੋਟਾ ਟਨ (US) sh.t',907.18474],['UK ਹੰਡਰਡਵੇਟ cwt',50.80234544],['US ਹੰਡਰਡਵੇਟ cwt',45.359237],['ਸਟੋਨ st',6.35029318],['ਡ੍ਰਾਮ dr',.0017718451953125],
+      ['ਡਾਨ dan',50],['ਜਿਨ jin',.5],['ਚੀਆਨ qian',.005],['ਲਿਆਂਗ liang',.05],['ਜਿਨ (ਤਾਈਵਾਨ) jin(tw)',.6]],
+    speed:[['ਪ੍ਰਕਾਸ਼ ਗਤੀ c',299792458],['ਮੈਕ Ma',340.3],['ਮੀਟਰ/ਸਕਿੰਟ m/s',1],['ਕਿ.ਮੀ./ਘੰਟਾ km/h',1/3.6],['ਕਿ.ਮੀ./ਸਕਿੰਟ km/s',1000],['ਨਾਟ kn',1852/3600],['ਮੀਲ/ਘੰਟਾ mph',.44704],['ਫੁੱਟ/ਸਕਿੰਟ fps',.3048],['ਇੰਚ/ਸਕਿੰਟ ips',.0254]],
+    time:[['ਸਾਲ y',31557600],['ਮਹੀਨਾ mo',2629800],['ਹਫ਼ਤਾ wk',604800],['ਦਿਨ d',86400],['ਘੰਟਾ h',3600],['ਮਿੰਟ min',60],['ਸਕਿੰਟ s',1],['ਮਿਲੀਸਕਿੰਟ ms',1e-3],['ਮਾਈਕਰੋਸਕਿੰਟ µs',1e-6],['ਪਿਕੋਸਕਿੰਟ ps',1e-12]],
+    volume:[['ਘਣ ਮੀਟਰ m³',1000],['ਘਣ ਡੈਸੀਮੀਟਰ dm³',1],['ਘਣ ਸੈਂਟੀਮੀਟਰ cm³',.001],['ਘਣ ਮਿਲੀਮੀਟਰ mm³',1e-6],['ਹੈਕਟੋਲਿਟਰ hl',100],['ਲਿਟਰ l',1],['ਡੈਸੀਲਿਟਰ dl',.1],['ਸੈਂਟੀਲਿਟਰ cl',.01],['ਮਿਲੀਲਿਟਰ ml',.001],
+      ['ਘਣ ਫੁੱਟ ft³',28.316846592],['ਘਣ ਇੰਚ in³',.016387064],['ਘਣ ਗਜ਼ yd³',764.554857984],['ਏਕੜ-ਫੁੱਟ ac·ft',1233481.8375475],
+      ['ਗੈਲਨ (US)',3.785411784],['ਕੱਪ',.2365882],['ਚਮਚ (tbsp)',.0147868]]};
+  var TEMP={from:function(v,i){return i==0?v:i==1?(v-32)*5/9:i==2?v-273.15:i==3?(v-491.67)*5/9:v*5/4},to:function(c,i){return i==0?c:i==1?c*9/5+32:i==2?c+273.15:i==3?(c+273.15)*9/5:c*4/5}};
+  var TOOLS=[
+  {n:'ਉਮਰ',i:'🎂',b:function(){
+    var G=[['ਸਾਲ','sy'],['ਮਹੀਨੇ','sm'],['ਹਫ਼ਤੇ','sw'],['ਦਿਨ','sd'],['ਘੰਟੇ','sh'],['ਮਿੰਟ','sn']];
+    body.innerHTML='<div class=ag-r><span>ਜਨਮ ਤਾਰੀਖ</span>'+dtF('a','','o')+'</div><div class=ag-r><span>ਅੱਜ</span>'+dtF('b',TD)+'</div>'+
+      '<div class=ag-c><div class=ag-t><div><div class=ag-h>ਉਮਰ</div><div class=ag-big><b id=y>—</b> ਸਾਲ</div><small id=ym></small></div><div class=ag-v></div>'+
+      '<div class=ag-m><div class="ag-h o">ਅਗਲਾ ਜਨਮਦਿਨ</div><div class=ag-cake>🎂</div><div id=wd></div><small id=nb></small></div></div>'+
+      '<div class=ag-s>ਸਾਰ</div><div class=ag-g>'+G.map(function(g){return '<div><small>'+g[0]+'</small><b id='+g[1]+'>—</b></div>'}).join('')+'</div></div>';
+    var set=function(id,t){ q('#'+id).textContent=t; };
+    upd=function(){
+      var a=D(q('#a').value), b=D(q('#b').value);
+      if(!a||!b||b<a){ ['y','sy','sm','sw','sd','sh','sn'].forEach(function(k){set(k,'—')}); set('ym',a&&b?'ਤਾਰੀਖ ਗਲਤ':''); set('wd',''); set('nb',''); return; }
+      var d=ymd(a,b), days=Math.round((b-a)/864e5), n=new Date(b.getFullYear(),a.getMonth(),a.getDate()); if(n<b) n.setFullYear(b.getFullYear()+1);
+      var r=ymd(b,n);
+      set('y',d.y); set('ym',d.m+' ਮਹੀਨੇ | '+d.d+' ਦਿਨ');
+      set('wd',['ਐਤਵਾਰ','ਸੋਮਵਾਰ','ਮੰਗਲਵਾਰ','ਬੁੱਧਵਾਰ','ਵੀਰਵਾਰ','ਸ਼ੁੱਕਰਵਾਰ','ਸ਼ਨੀਵਾਰ'][n.getDay()]); set('nb',(r.y*12+r.m)+' ਮਹੀਨੇ | '+r.d+' ਦਿਨ');
+      set('sy',d.y); set('sm',d.y*12+d.m); set('sw',Math.floor(days/7)); set('sd',days); set('sh',days*24); set('sn',days*1440); }}},
+  {n:'ਖੇਤਰਫਲ',k:1,i:'📐',b:function(){cv(CT.area)}},
+  {n:'BMI',k:1,i:'⚖️',b:function(){
+    var WU=[['ਕਿਲੋਗ੍ਰਾਮ',1],['ਪਾਊਂਡ',.45359237]], HU=[['ਸੈਂਟੀਮੀਟਰ',.01],['ਮੀਟਰ',1],['ਫੁੱਟ',.3048],['ਇੰਚ',.0254]];
+    body.innerHTML=L('ਭਾਰ','<div class=bm-r><select id=wu>'+opts(WU,0)+'</select><input id=w inputmode=decimal value=60></div>')+
+      L('ਕੱਦ','<div class=bm-r><select id=hu>'+opts(HU,0)+'</select><input id=h inputmode=decimal value=170></div>')+'<div class=tl-res></div>'+
+      '<div class=bm-sc><div class=bm-bar><i style="width:28.33%;background:#3b82f6"></i><i style="width:21.67%;background:#22c55e"></i><i style="width:16.67%;background:#f59e0b"></i><i style="width:33.33%;background:#ef4444"></i><u id=mk></u></div>'+
+      '<div class=bm-nm><span>ਘੱਟ ਭਾਰ</span><span>ਠੀਕ</span><span>ਵੱਧ ਭਾਰ</span><span>ਮੋਟਾਪਾ</span></div>'+
+      '<div class=bm-tk><span style="left:28.33%">18.5</span><span style="left:50%">25</span><span style="left:66.67%">30</span></div></div>';
+    function link(sel,inp,U){ var pv=0; q(sel).addEventListener('change',function(){ /* ਇਕਾਈ ਬਦਲਣ 'ਤੇ ਮੁੱਲ ਵੀ ਬਦਲ ਜਾਂਦਾ ਹੈ */
+      var nv=+this.value, x=parseFloat(q(inp).value); if(!isNaN(x)) q(inp).value=+(x*U[pv][1]/U[nv][1]).toFixed(4); pv=nv; }); }
+    link('#wu','#w',WU); link('#hu','#h',HU);
+    upd=function(){ var w=parseFloat(q('#w').value)*WU[q('#wu').value][1], h=parseFloat(q('#h').value)*HU[q('#hu').value][1], r=q('.tl-res');
+      var sc=q('.bm-sc'); if(!(w>0&&h>0)){r.textContent='';sc.style.visibility='hidden';return} var b=w/(h*h), k=b<18.5?0:b<25?1:b<30?2:3;
+      sc.style.visibility='visible'; q('#mk').style.left=Math.min(100,Math.max(0,(b-10)/30*100))+'%';
+      Array.prototype.forEach.call(q('.bm-nm').children,function(e,n){ e.className=n===k?'on':''; });
+      r.innerHTML='BMI '+b.toFixed(1)+'<br><small>'+(b<18.5?'ਘੱਟ ਭਾਰ':b<25?'ਠੀਕ ਭਾਰ':b<30?'ਵੱਧ ਭਾਰ':'ਮੋਟਾਪਾ')+'</small>'; }}},
+  {n:'ਡਾਟਾ',k:1,i:'💾',b:function(){cv(CT.data)}},
+  {n:'ਤਾਰੀਖ',i:'📅',b:function(){
+    body.innerHTML=L('ਪਹਿਲੀ ਤਾਰੀਖ',dtF('a',TD,'',1))+L('ਦੂਜੀ ਤਾਰੀਖ',dtF('b',TD,'',1))+'<div class=tl-res></div>';
+    upd=function(){ var a=D(q('#a').value), b=D(q('#b').value), h='';
+      if(a&&b){ var x=a<b?a:b, y=a<b?b:a, d=ymd(x,y); h+=d.y+' ਸਾਲ '+d.m+' ਮਹੀਨੇ '+d.d+' ਦਿਨ<br><small>ਕੁੱਲ '+Math.round((y-x)/864e5)+' ਦਿਨ ਦਾ ਫ਼ਰਕ</small><br>'; }
+      q('.tl-res').innerHTML=h; }}},
+  {n:'ਡਿਸਕਾਉਂਟ',k:1,i:'🏷️',b:function(){
+    body.innerHTML=L('ਕੀਮਤ','<input id=p inputmode=decimal>')+L('ਡਿਸਕਾਉਂਟ %','<input id=d inputmode=decimal>')+'<div class=tl-res></div>';
+    upd=function(){ var p=parseFloat(q('#p').value), d=parseFloat(q('#d').value)||0, r=q('.tl-res');
+      if(isNaN(p)){r.textContent='';return} var s=p*d/100;
+      r.innerHTML='ਛੋਟ ਤੋਂ ਬਾਅਦ ਕੀਮਤ: '+f(p-s)+'<br><small>ਬੱਚਤ: '+f(s)+'</small>'; }}},
+  {n:'ਲੰਬਾਈ',k:1,i:'📏',b:function(){cv(CT.length)}},
+  {n:'ਭਾਰ',k:1,i:'🏋️',b:function(){cv(CT.mass)}},
+  {n:'ਸੰਖਿਆ ਪ੍ਰਣਾਲੀ',k:1,i:'🔢',b:function(){
+    var B=[['ਬਾਈਨਰੀ (2)',2],['ਆਕਟਲ (8)',8],['ਦਸ਼ਮਲਵ (10)',10],['ਹੈਕਸਾ (16)',16]];
+    body.innerHTML=L('ਸੰਖਿਆ','<input id=v value=10 data-nosign>')+L('ਇਸ ਪ੍ਰਣਾਲੀ ਵਿੱਚ ਹੈ','<select id=a>'+opts(B,2)+'</select>')+'<div class=hx>'+'ABCDEF'.split('').map(function(c){return '<button type=button data-h='+c+'>'+c+'</button>'}).join('')+'</div><div class=tl-res></div>';
+    upd=function(){ var b=B[q('#a').value][1], s=q('#v').value.trim().toUpperCase(), r=q('.tl-res'), dg='0123456789ABCDEF'.slice(0,b);
+      if(!s||!s.split('').every(function(c){return dg.indexOf(c)>=0})){ r.textContent=s?'ਗਲਤ ਅੰਕ':''; return; }
+      var n=BigInt(0), bb=BigInt(b), k; for(k=0;k<s.length;k++) n=n*bb+BigInt(dg.indexOf(s[k]));
+      r.innerHTML='BIN '+n.toString(2)+'<br>OCT '+n.toString(8)+'<br>DEC '+n.toString(10)+'<br>HEX '+n.toString(16).toUpperCase(); }}},
+  {n:'ਰਫ਼ਤਾਰ',k:1,i:'🚀',b:function(){cv(CT.speed,null,null,2,3)}},
+  {n:'ਤਾਪਮਾਨ',k:1,i:'🌡️',b:function(){cv([['ਸੈਲਸੀਅਸ °C'],['ਫ਼ਾਰਨਹੀਟ °F'],['ਕੈਲਵਿਨ K'],['ਰੈਂਕਿਨ °R'],['ਰੇਓਮਰ °Re']],TEMP)}},
+  {n:'ਸਮਾਂ',k:1,i:'⏱️',b:function(){cv(CT.time,null,null,5,6)}},
+  {n:'ਆਇਤਨ',k:1,i:'🧊',b:function(){cv(CT.volume,null,null,5,8)}},
+  {n:'ਕਰਜ਼ਾ',k:1,i:'🏦',b:function(){
+    var Y=[],M=[],y,m; for(y=0;y<=50;y++) Y.push([y+' ਸਾਲ']); for(m=0;m<12;m++) M.push([m+' ਮਹੀਨੇ']);
+    body.innerHTML=L('ਮੂਲ ਰਕਮ','<input id=p inputmode=decimal placeholder="ਰਕਮ ਲਿਖੋ">')+L('ਵਿਆਜ ਦਰ (% ਸਾਲਾਨਾ)','<input id=r inputmode=decimal placeholder="ਸਾਲਾਨਾ ਦਰ">')+
+      L('ਕਰਜ਼ੇ ਦੀ ਮਿਆਦ','<div class=bm-r><select id=ty>'+opts(Y,12)+'</select><select id=tm>'+opts(M,0)+'</select></div>')+'<div class=tl-res></div>';
+    upd=function(){ var P=parseFloat(q('#p').value), R=parseFloat(q('#r').value)||0, n=(+q('#ty').value)*12+(+q('#tm').value), t=q('.tl-res');
+      if(!(P>0)||n<=0){ t.textContent=''; return; }
+      var i=R/1200, g=Math.pow(1+i,n), e=i?P*i*g/(g-1):P/n, tot=e*n, r2=function(v){return f(+v.toFixed(2))};
+      t.innerHTML='EMI: '+r2(e)+'<br><small>ਕੁੱਲ ਵਿਆਜ: '+r2(tot-P)+'<br>ਕੁੱਲ ਭੁਗਤਾਨ: '+r2(tot)+'</small>'; }}},
+  {n:'ਨਿਵੇਸ਼',k:1,i:'📈',b:function(){
+    var Y=[],M=[],y,m; for(y=0;y<=50;y++) Y.push([y+' ਸਾਲ']); for(m=0;m<12;m++) M.push([m+' ਮਹੀਨੇ']);
+    body.innerHTML='<div class=gs><button type=button data-c=o class=on>ਇੱਕ ਵਾਰ</button><button type=button data-c=r>ਹਰ ਮਹੀਨੇ</button></div>'+
+      '<label id=lb>ਕੁੱਲ ਨਿਵੇਸ਼</label><input id=p inputmode=decimal placeholder="ਰਕਮ ਲਿਖੋ">'+L('ਵਿਆਜ ਦਰ (% ਸਾਲਾਨਾ)','<input id=r inputmode=decimal placeholder="ਸਾਲਾਨਾ ਦਰ">')+
+      L('ਮਿਆਦ','<div class=bm-r><select id=ty>'+opts(Y,3)+'</select><select id=tm>'+opts(M,0)+'</select></div>')+'<div class=tl-res></div>';
+    upd=function(){ var rec=q('.gs .on').getAttribute('data-c')==='r', P=parseFloat(q('#p').value), R=parseFloat(q('#r').value)||0, n=(+q('#ty').value)*12+(+q('#tm').value), t=q('.tl-res');
+      q('#lb').textContent=rec?'ਮਹੀਨਾਵਾਰ ਨਿਵੇਸ਼':'ਕੁੱਲ ਨਿਵੇਸ਼';
+      if(!(P>0)||n<=0){ t.textContent=''; return; }
+      var i=R/1200, inv, fv, r2=function(v){return f(+v.toFixed(2))};
+      if(rec){ inv=P*n; fv=i?P*((Math.pow(1+i,n)-1)/i)*(1+i):inv; } else { inv=P; fv=P*Math.pow(1+i,n); }
+      t.innerHTML='ਕੁੱਲ ਮੁੱਲ: '+r2(fv)+'<br><small>ਨਿਵੇਸ਼: '+r2(inv)+'<br>ਵਿਆਜ: '+r2(fv-inv)+'</small>'; }}},
+  {n:'GST',k:1,i:'🧾',b:function(){
+    body.innerHTML=L('ਅਸਲ ਕੀਮਤ','<input id=p inputmode=decimal value=100>')+'<label>GST ਦਰ</label><div class=gs data-g=r>'+
+      [3,5,18,40].map(function(r){return '<button type=button data-c='+r+(r===5?' class=on':'')+'>'+r+'%</button>'}).join('')+'</div>'+
+      '<div class=gs data-g=m><button type=button data-c=a class=on>GST ਜੋੜੋ</button><button type=button data-c=x>GST ਕੱਢੋ</button></div><div class=tl-res></div>';
+    upd=function(){ var p=parseFloat(q('#p').value), t=q('.tl-res'); if(isNaN(p)){ t.textContent=''; return; }
+      var r=+q('.gs[data-g=r] .on').getAttribute('data-c'), add=q('.gs[data-g=m] .on').getAttribute('data-c')==='a', r2=function(v){return f(+v.toFixed(2))}, tax, base;
+      if(add){ tax=p*r/100; t.innerHTML='ਆਖਰੀ ਕੀਮਤ: '+r2(p+tax)+'<br><small>GST: '+r2(tax)+'<br>CGST/SGST: '+r2(tax/2)+'</small>'; }
+      else { base=p*100/(100+r); tax=p-base; t.innerHTML='GST ਤੋਂ ਬਿਨਾਂ ਕੀਮਤ: '+r2(base)+'<br><small>GST: '+r2(tax)+'<br>CGST/SGST: '+r2(tax/2)+'</small>'; } }}}];
+  /* ---- ਇਕਾਈ ਚੁਣਨ ਲਈ ਹੇਠੋਂ ਖੁੱਲ੍ਹਣ ਵਾਲੀ ਵਿੰਡੋ (ਸੂਚੀ + ਰੱਦ ਕਰੋ) ---- */
+  /* ---- ਇਕਾਈਆਂ ਦੀ ਸੂਚੀ: ਲੰਮਾ ਦਬਾ ਕੇ ਉੱਪਰ-ਥੱਲੇ ਖਿੱਚੋ, ਕ੍ਰਮ ਯਾਦ ਰਹਿੰਦਾ ਹੈ ---- */
+  var curTool='', ulp=null, ud=null, utm=0, uClk=0;
+  var UKEY=function(sl){ return 'nt_calc_uord_'+curTool+'_'+sl.id; };
+  function canReorder(sl){ return /^(a|b|wu|hu)$/.test(sl.id); }
+  function applyUnitOrd(sl){
+    if(!canReorder(sl)) return;
+    var sv=[]; try{ sv=JSON.parse(localStorage.getItem(UKEY(sl))||'[]'); }catch(e){}
+    if(!Array.isArray(sv)||!sv.length) return;
+    var map={}; Array.prototype.forEach.call(sl.options,function(o){ map[o.value]=o; });
+    sv.forEach(function(v){ if(map[v]){ sl.appendChild(map[v]); delete map[v]; } });
+    Array.prototype.forEach.call(Array.prototype.slice.call(sl.options),function(o){ if(map[o.value]) sl.appendChild(o); });
+  }
+  function uCancel(){ if(ulp){ clearTimeout(ulp.t); ulp=null; } }
+  function uStart(list,sl,x,y,t){
+    uCancel(); var el=t&&t.closest&&t.closest('.tl-so'); if(!el||!list.contains(el)) return;
+    ulp={list:list,sl:sl,el:el,x:x,y:y,lx:x,ly:y,t:setTimeout(uPick,420)};
+  }
+  function uMove(x,y){ if(!ulp) return; ulp.lx=x; ulp.ly=y; if(Math.abs(x-ulp.x)>10||Math.abs(y-ulp.y)>10) uCancel(); }
+  function uPick(){
+    if(!ulp) return; var c=ulp; ulp=null;
+    if(!c.list.isConnected) return;
+    ud={list:c.list,sl:c.sl,el:c.el,x:c.lx,y:c.ly}; sw=null;
+    c.el.classList.add('lift'); try{ if(navigator.vibrate) navigator.vibrate(18); }catch(e){}
+    uPlace(); utm=setInterval(uTick,30);
+  }
+  function uPlace(){
+    var el=ud.el, sc=st.s||1; el.style.transform='none';
+    var r=el.getBoundingClientRect();
+    el.style.transform='translateY('+((ud.y-(r.top+r.height/2))/sc)+'px)';
+  }
+  function uHit(){
+    var o=document.elementFromPoint(ud.x,ud.y); o=o&&o.closest&&o.closest('.tl-so');
+    if(o&&o!==ud.el&&ud.list.contains(o)){
+      var kids=Array.prototype.slice.call(ud.list.children);
+      ud.list.insertBefore(ud.el, kids.indexOf(ud.el)<kids.indexOf(o)?o.nextSibling:o);
+      uPlace();
+    }
+  }
+  function uDrag(x,y){ ud.x=x; ud.y=y; uPlace(); uHit(); }
+  function uTick(){
+    if(!ud) return; var g=ud.list, r=g.getBoundingClientRect(), v=0;
+    if(ud.y<r.top+28) v=-9; else if(ud.y>r.bottom-28) v=9;
+    if(v&&((v<0&&g.scrollTop>0)||(v>0&&g.scrollTop<g.scrollHeight-g.clientHeight))){ g.scrollTop+=v; uPlace(); uHit(); }
+  }
+  function uEnd(){
+    uCancel(); if(!ud) return;
+    clearInterval(utm); var d=ud; ud=null;
+    d.el.classList.remove('lift'); d.el.style.transform='';
+    var vals=Array.prototype.map.call(d.list.children,function(k){ return k.getAttribute('data-v'); });
+    var map={}; Array.prototype.forEach.call(d.sl.options,function(o){ map[o.value]=o; });
+    vals.forEach(function(v){ if(map[v]) d.sl.appendChild(map[v]); });
+    try{ localStorage.setItem(UKEY(d.sl),JSON.stringify(vals)); }catch(e){}
+    uClk=Date.now()+450; /* ਛੱਡਣ ਵੇਲੇ ਇਕਾਈ ਚੁਣੀ ਨਾ ਜਾਵੇ */
+  }
+  window.addEventListener('pointermove',function(e){ if(e.pointerType!=='mouse') return; if(ud) uDrag(e.clientX,e.clientY); else uMove(e.clientX,e.clientY); });
+  window.addEventListener('pointerup',function(e){ if(e.pointerType==='mouse') uEnd(); });
+  function sheet(sl,title){
+    var o=document.createElement('div'); o.className='tl-sheet';
+    var can=canReorder(sl);
+    o.innerHTML='<div class="tl-bd"></div><div class="tl-sh"><div class="tl-st"></div>'+(can?'<div class="tl-hint">ਲੰਮਾ ਦਬਾ ਕੇ ਉੱਪਰ-ਥੱਲੇ ਖਿੱਚੋ</div>':'')+'<div class="tl-sl"></div><button type="button" class="tl-cn">ਰੱਦ ਕਰੋ</button></div>';
+    o.querySelector('.tl-st').textContent=title;
+    var list=o.querySelector('.tl-sl');
+    Array.prototype.forEach.call(sl.options,function(op,i){
+      var b=document.createElement('button'); b.type='button'; b.className='tl-so'+(i===sl.selectedIndex?' on':''); b.textContent=op.text;
+      b.setAttribute('data-v',op.value);
+      b.addEventListener('click',function(){
+        if(Date.now()<uClk) return;
+        sl.value=b.getAttribute('data-v'); sl.dispatchEvent(new Event('change',{bubbles:true})); o.remove(); });
+      list.appendChild(b);
+    });
+    if(can){
+      list.addEventListener('touchstart',function(e){ if(e.touches.length===1) uStart(list,sl,e.touches[0].clientX,e.touches[0].clientY,e.target); else { uCancel(); uEnd(); } },{passive:true});
+      list.addEventListener('touchmove',function(e){ var t=e.touches[0]; if(!t) return; if(ud){ e.preventDefault(); uDrag(t.clientX,t.clientY); } else uMove(t.clientX,t.clientY); },{passive:false});
+      list.addEventListener('touchend',uEnd,{passive:true});
+      list.addEventListener('touchcancel',uEnd,{passive:true});
+      list.addEventListener('pointerdown',function(e){ if(e.pointerType==='mouse'&&e.button===0) uStart(list,sl,e.clientX,e.clientY,e.target); });
+      list.addEventListener('contextmenu',function(e){ e.preventDefault(); });
+    }
+    o.querySelector('.tl-bd').addEventListener('click',function(){ o.remove(); });
+    o.querySelector('.tl-cn').addEventListener('click',function(){ o.remove(); });
+    T.appendChild(o);
+    var on=list.querySelector('.on'); if(on) list.scrollTop=on.offsetTop-list.clientHeight/3;
+  }
+  function enhance(){
+    Array.prototype.forEach.call(body.querySelectorAll('select'),function(sl){
+      applyUnitOrd(sl);
+      if(/^(a|b)$/.test(sl.id)){
+        var SK='nt_calc_usel_'+curTool+'_'+sl.id, sv=null; try{ sv=localStorage.getItem(SK); }catch(_){}
+        if(sv!==null&&Array.prototype.some.call(sl.options,function(o){return o.value===sv})) sl.value=sv;
+        sl.addEventListener('change',function(){ try{ localStorage.setItem(SK,sl.value); }catch(_){} });
+      }
+      var lb=sl.parentNode===body?null:sl.parentNode.previousElementSibling, ttl=lb&&lb.tagName==='LABEL'?lb.textContent:'ਇਕਾਈ ਚੁਣੋ';
+      var b=document.createElement('button'); b.type='button'; b.className='tl-sel';
+      var lab=function(){ b.textContent=sl.options[sl.selectedIndex].text+' ▾'; };
+      lab(); sl.style.display='none'; sl.parentNode.insertBefore(b,sl);
+      sl.addEventListener('change',lab);
+      b.addEventListener('click',function(){ sheet(sl,ttl); });
+    });
+  }
+  /* ---- ਟੂਲਾਂ ਦਾ ਕ੍ਰਮ (ਲੰਮਾ ਦਬਾ ਕੇ ਖਿੱਚਣ ਨਾਲ ਬਦਲਦਾ ਹੈ, ਯਾਦ ਰਹਿੰਦਾ ਹੈ) ---- */
+  var ORDK='nt_calc_tools_ord_v1', ord=[];
+  (function(){
+    var names=[], seen={}; try{ names=JSON.parse(localStorage.getItem(ORDK)||'[]'); }catch(e){}
+    if(!Array.isArray(names)) names=[];
+    names.forEach(function(n){ for(var i=0;i<TOOLS.length;i++){ if(TOOLS[i].n===n&&!seen[i]){ seen[i]=1; ord.push(i); break; } } });
+    TOOLS.forEach(function(t,i){ if(!seen[i]) ord.push(i); });
+  })();
+  function saveOrd(){ try{ localStorage.setItem(ORDK,JSON.stringify(ord.map(function(i){return TOOLS[i].n}))); }catch(e){} }
+  /* ਟੂਲਾਂ ਦੇ ਅਸਲੀ-ਜਿਹੇ (ਗਰੇਡੀਐਂਟ/ਪਰਛਾਵੇਂ ਵਾਲੇ) ਆਈਕਨ */
+  var IC={
+    'ਉਮਰ':'<svg viewBox="0 0 48 48"><defs><linearGradient id="u1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb3c7"/><stop offset="1" stop-color="#e0527f"/></linearGradient><linearGradient id="u2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe3a3"/><stop offset="1" stop-color="#e8a33d"/></linearGradient><linearGradient id="u3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd54f"/><stop offset="1" stop-color="#ff5722"/></linearGradient></defs><ellipse cx="24" cy="43" rx="19" ry="3.5" fill="#000" opacity=".18"/><rect x="6" y="28" width="36" height="14" rx="4.5" fill="url(#u2)"/><path d="M6 31.5h36v-3.5a4 4 0 0 0-4-4H10a4 4 0 0 0-4 4z" fill="#fff"/><path d="M6 30q3.5 6 7 0t7 0 7 0 7 0 7 0v-2H6z" fill="#fff"/><rect x="12" y="17" width="24" height="11" rx="4" fill="url(#u1)"/><path d="M12 24q3 4 6 0t6 0 6 0 6 0v-3H12z" fill="#fff" opacity=".85"/><rect x="22.5" y="8.5" width="3" height="9" rx="1.2" fill="#4fc3f7"/><path d="M24 2.5c3.2 3 3.2 6 0 7.6-3.2-1.6-3.2-4.6 0-7.6z" fill="url(#u3)"/><rect x="9" y="31" width="30" height="2" rx="1" fill="#fff" opacity=".25"/></svg>',
+    'ਖੇਤਰਫਲ':'<svg viewBox="0 0 48 48"><defs><linearGradient id="a1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe082"/><stop offset="1" stop-color="#f2a413"/></linearGradient></defs><path d="M7 41V7l34 34z" fill="url(#a1)" stroke="#b9770e" stroke-width="1.3" stroke-linejoin="round"/><path d="M14.5 34V21.5L27 34z" fill="#fff" opacity=".55" stroke="#c98a14" stroke-width=".8"/><path d="M7 13h4M7 19h3M7 25h4M7 31h3M7 37h4" stroke="#6b4a08" stroke-width="1.3" stroke-linecap="round"/><path d="M10 38V12" stroke="#fff" stroke-width="1.6" opacity=".5" stroke-linecap="round"/></svg>',
+    'BMI':'<svg viewBox="0 0 48 48"><defs><linearGradient id="b1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eceff1"/><stop offset="1" stop-color="#90a4ae"/></linearGradient><linearGradient id="b2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#cfd8dc"/></linearGradient></defs><rect x="5" y="7" width="38" height="35" rx="10" fill="url(#b1)" stroke="#78909c" stroke-width="1.2"/><circle cx="24" cy="22" r="12" fill="url(#b2)" stroke="#90a4ae" stroke-width="1.2"/><path d="M15.5 22a8.5 8.5 0 0 1 17 0" fill="none" stroke="#43a047" stroke-width="2.4" stroke-linecap="round"/><path d="M24 22l5.5-6" stroke="#e53935" stroke-width="2.4" stroke-linecap="round"/><circle cx="24" cy="22" r="2.3" fill="#37474f"/><rect x="15" y="35" width="18" height="4" rx="2" fill="#fff" opacity=".55"/></svg>',
+    'ਡਾਟਾ':'<svg viewBox="0 0 48 48"><defs><linearGradient id="d1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5c9bff"/><stop offset="1" stop-color="#1e4fd0"/></linearGradient></defs><path d="M7 10a4 4 0 0 1 4-4h25l6 6v26a4 4 0 0 1-4 4H11a4 4 0 0 1-4-4z" fill="url(#d1)" stroke="#173a9a" stroke-width="1.2"/><rect x="14" y="6" width="18" height="12" rx="1.5" fill="#cfd8dc" stroke="#90a4ae" stroke-width=".8"/><rect x="25.5" y="8" width="4" height="8" rx="1" fill="#546e7a"/><rect x="12" y="25" width="24" height="16" rx="2" fill="#fff"/><path d="M16 30h16M16 35h11" stroke="#90a4ae" stroke-width="1.8" stroke-linecap="round"/></svg>',
+    'ਤਾਰੀਖ':'<svg viewBox="0 0 48 48"><defs><linearGradient id="t1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff7b72"/><stop offset="1" stop-color="#d32f2f"/></linearGradient></defs><rect x="5" y="9" width="38" height="34" rx="6" fill="#fff" stroke="#b0bec5" stroke-width="1.2"/><path d="M5 15a6 6 0 0 1 6-6h26a6 6 0 0 1 6 6v6H5z" fill="url(#t1)"/><rect x="13.5" y="4" width="4.5" height="9" rx="2.2" fill="#607d8b"/><rect x="30" y="4" width="4.5" height="9" rx="2.2" fill="#607d8b"/><g fill="#90a4ae"><rect x="10" y="26" width="6" height="5" rx="1.5"/><rect x="21" y="26" width="6" height="5" rx="1.5"/><rect x="32" y="26" width="6" height="5" rx="1.5"/><rect x="10" y="34" width="6" height="5" rx="1.5"/><rect x="32" y="34" width="6" height="5" rx="1.5"/></g><rect x="21" y="34" width="6" height="5" rx="1.5" fill="#e53935"/></svg>',
+    'ਡਿਸਕਾਉਂਟ':'<svg viewBox="0 0 48 48"><defs><linearGradient id="c1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffb74d"/><stop offset="1" stop-color="#e65100"/></linearGradient></defs><path d="M25.5 5H39a4 4 0 0 1 4 4v13.5a4 4 0 0 1-1.2 2.8L25.3 41.8a4 4 0 0 1-5.6 0L6.2 28.3a4 4 0 0 1 0-5.6L22.7 6.2A4 4 0 0 1 25.5 5z" fill="url(#c1)" stroke="#b34700" stroke-width="1.2"/><circle cx="35" cy="13" r="3.2" fill="#fff" stroke="#b34700" stroke-width="1"/><circle cx="21" cy="21.5" r="2.8" fill="#fff"/><circle cx="29.5" cy="30" r="2.8" fill="#fff"/><path d="M30.5 19.5l-11 13" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>',
+    'ਲੰਬਾਈ':'<svg viewBox="0 0 48 48"><defs><linearGradient id="l1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe082"/><stop offset="1" stop-color="#f2a413"/></linearGradient></defs><g transform="rotate(-38 24 24)"><rect x="1" y="15.5" width="46" height="17" rx="3.5" fill="url(#l1)" stroke="#b9770e" stroke-width="1.2"/><path d="M7 15.5v7M13 15.5v5M19 15.5v7M25 15.5v5M31 15.5v7M37 15.5v5M43 15.5v7" stroke="#5d3d06" stroke-width="1.4" stroke-linecap="round"/><rect x="3" y="27" width="42" height="2" rx="1" fill="#fff" opacity=".4"/></g></svg>',
+    'ਭਾਰ':'<svg viewBox="0 0 48 48"><defs><linearGradient id="w1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#78909c"/><stop offset="1" stop-color="#263238"/></linearGradient><linearGradient id="w2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eceff1"/><stop offset="1" stop-color="#78909c"/></linearGradient></defs><rect x="17" y="21" width="14" height="6" rx="2" fill="url(#w2)"/><rect x="3.5" y="15" width="6.5" height="18" rx="2.5" fill="url(#w1)"/><rect x="9.5" y="10" width="8" height="28" rx="3" fill="url(#w1)"/><rect x="38" y="15" width="6.5" height="18" rx="2.5" fill="url(#w1)"/><rect x="30.5" y="10" width="8" height="28" rx="3" fill="url(#w1)"/><path d="M12 13v22M33 13v22" stroke="#fff" stroke-width="1.4" opacity=".3" stroke-linecap="round"/></svg>',
+    'ਸੰਖਿਆ ਪ੍ਰਣਾਲੀ':'<svg viewBox="0 0 48 48"><defs><linearGradient id="n1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5b6cff"/><stop offset="1" stop-color="#2a2fa3"/></linearGradient></defs><rect x="4" y="9" width="40" height="30" rx="8" fill="url(#n1)" stroke="#1d2175" stroke-width="1.2"/><rect x="7" y="11" width="34" height="9" rx="4.5" fill="#fff" opacity=".18"/><text x="24" y="31.5" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="800" fill="#fff">123</text></svg>',
+    'ਰਫ਼ਤਾਰ':'<svg viewBox="0 0 48 48"><defs><linearGradient id="r1" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#b0bec5"/></linearGradient><linearGradient id="r2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffee58"/><stop offset="1" stop-color="#ff3d00"/></linearGradient></defs><g transform="translate(24 24) rotate(45) scale(.82) translate(-24 -24)"><path d="M24 37c-4.5 3.5-4.5 8 0 11.5 4.5-3.5 4.5-8 0-11.5z" fill="url(#r2)"/><path d="M17 24l-7 11 7-2zM31 24l7 11-7-2z" fill="#e53935" stroke="#a31515" stroke-width=".8" stroke-linejoin="round"/><path d="M24 2c7.5 6 9 17 7.5 31h-15C15 19 16.5 8 24 2z" fill="url(#r1)" stroke="#78909c" stroke-width="1"/><path d="M24 2c3.2 2.6 5.3 6 6.3 10.5H17.7C18.7 8 20.8 4.6 24 2z" fill="#e53935"/><circle cx="24" cy="21" r="4.6" fill="#42a5f5" stroke="#fff" stroke-width="1.8"/><rect x="18.5" y="32" width="11" height="3.5" rx="1.5" fill="#78909c"/></g></svg>',
+    'ਤਾਪਮਾਨ':'<svg viewBox="0 0 48 48"><defs><linearGradient id="p1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff8a80"/><stop offset="1" stop-color="#d50000"/></linearGradient></defs><circle cx="24" cy="37" r="8.5" fill="url(#p1)" stroke="#90a4ae" stroke-width="1.5"/><rect x="19" y="4" width="10" height="32" rx="5" fill="#e3f2fd" stroke="#90a4ae" stroke-width="1.5"/><circle cx="24" cy="37" r="6.2" fill="url(#p1)"/><rect x="22" y="14" width="4" height="23" rx="2" fill="#e53935"/><rect x="21.2" y="7" width="2" height="14" rx="1" fill="#fff" opacity=".85"/><path d="M32 10h4.5M32 16h3M32 22h4.5M32 28h3" stroke="#78909c" stroke-width="1.6" stroke-linecap="round"/></svg>',
+    'ਸਮਾਂ':'<svg viewBox="0 0 48 48"><defs><linearGradient id="s1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eceff1"/><stop offset="1" stop-color="#78909c"/></linearGradient></defs><rect x="19.5" y="2" width="9" height="4.5" rx="1.8" fill="#607d8b"/><rect x="22.5" y="5.5" width="3" height="5" fill="#607d8b"/><rect x="36" y="9" width="4.5" height="6" rx="1.8" transform="rotate(40 38 12)" fill="#607d8b"/><circle cx="24" cy="27" r="17.5" fill="url(#s1)" stroke="#546e7a" stroke-width="1.2"/><circle cx="24" cy="27" r="13.8" fill="#fff" stroke="#b0bec5" stroke-width="1"/><path d="M24 15v2.8M24 36.2V39M12 27h2.8M33.2 27H36" stroke="#546e7a" stroke-width="1.6" stroke-linecap="round"/><path d="M24 27V18" stroke="#e53935" stroke-width="2.4" stroke-linecap="round"/><path d="M24 27l6.5 3.5" stroke="#37474f" stroke-width="2.2" stroke-linecap="round"/><circle cx="24" cy="27" r="2.2" fill="#37474f"/></svg>',
+    'ਆਇਤਨ':'<svg viewBox="0 0 48 48"><defs><linearGradient id="v1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b3e5fc"/><stop offset="1" stop-color="#4fc3f7"/></linearGradient><linearGradient id="v2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4fc3f7"/><stop offset="1" stop-color="#0277bd"/></linearGradient></defs><path d="M24 4l17.5 9.5L24 23 6.5 13.5z" fill="#e1f5fe" stroke="#81d4fa" stroke-width="1" stroke-linejoin="round"/><path d="M6.5 13.5L24 23v21L6.5 34.5z" fill="url(#v1)" stroke="#4fc3f7" stroke-width="1" stroke-linejoin="round"/><path d="M41.5 13.5L24 23v21l17.5-9.5z" fill="url(#v2)" stroke="#0288d1" stroke-width="1" stroke-linejoin="round"/><path d="M11 17.5l7 3.8" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity=".85"/><path d="M11 25v6" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".6"/></svg>',
+    'ਕਰਜ਼ਾ':'<svg viewBox="0 0 48 48"><defs><linearGradient id="k1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#90caf9"/><stop offset="1" stop-color="#1565c0"/></linearGradient><linearGradient id="k2" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#b0bec5"/></linearGradient></defs><path d="M24 3.5L3.5 16.5h41z" fill="url(#k1)" stroke="#0d47a1" stroke-width="1.1" stroke-linejoin="round"/><circle cx="24" cy="12" r="2.6" fill="#fff"/><rect x="7" y="19.5" width="6" height="17" rx="1.2" fill="url(#k2)" stroke="#90a4ae" stroke-width=".9"/><rect x="16" y="19.5" width="6" height="17" rx="1.2" fill="url(#k2)" stroke="#90a4ae" stroke-width=".9"/><rect x="26" y="19.5" width="6" height="17" rx="1.2" fill="url(#k2)" stroke="#90a4ae" stroke-width=".9"/><rect x="35" y="19.5" width="6" height="17" rx="1.2" fill="url(#k2)" stroke="#90a4ae" stroke-width=".9"/><rect x="5" y="36.5" width="38" height="4" rx="1.3" fill="#cfd8dc" stroke="#90a4ae" stroke-width=".8"/><rect x="3" y="40.5" width="42" height="4" rx="1.5" fill="#90a4ae"/></svg>',
+    'ਨਿਵੇਸ਼':'<svg viewBox="0 0 48 48"><defs><linearGradient id="i1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#37474f"/><stop offset="1" stop-color="#102027"/></linearGradient><linearGradient id="i2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#81c784"/><stop offset="1" stop-color="#2e7d32"/></linearGradient></defs><rect x="3.5" y="5" width="41" height="38" rx="7" fill="url(#i1)" stroke="#000" stroke-width="1"/><rect x="9" y="29" width="7" height="10" rx="1.6" fill="url(#i2)"/><rect x="20.5" y="24" width="7" height="15" rx="1.6" fill="url(#i2)"/><rect x="32" y="19" width="7" height="20" rx="1.6" fill="url(#i2)"/><path d="M9.5 21.5l9-6.5 7 4.5 11-9" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M30 10h6.5v6.5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    'GST':'<svg viewBox="0 0 48 48"><defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#66bb6a"/><stop offset="1" stop-color="#2e7d32"/></linearGradient></defs><path d="M10 4.5h28V43l-4.67-3.2-4.66 3.2-4.67-3.2-4.67 3.2-4.66-3.2L10 43z" fill="#fff" stroke="#b0bec5" stroke-width="1.3" stroke-linejoin="round"/><path d="M15.5 12h17M15.5 18h17M15.5 24h10" stroke="#90a4ae" stroke-width="2" stroke-linecap="round"/><rect x="15.5" y="28.5" width="17" height="6.5" rx="2.2" fill="url(#g1)"/><text x="24" y="33.8" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="5.6" font-weight="800" fill="#fff">GST</text></svg>'
+  };
+  function head(t,a){ return '<div class="tl-h"><button type="button" class="hkc-hbtn" data-a="'+a+'">‹</button>'+t+'</div>'; }
+  function showGrid(dir){ upd=null; act=null; layoutT(false); T.innerHTML=head('ਟੂਲ','x')+'<div class="tl-grid">'+ord.map(function(i){var t=TOOLS[i]; return '<button type="button" class="tl-t" data-i="'+i+'"><b>'+(IC[t.n]||t.i)+'</b>'+t.n+'</button>'}).join('')+'</div>'; jump(dir); }
+  function showTool(i){ TD=nowTD(); curTool=TOOLS[i].n; T.innerHTML=head(TOOLS[i].n,'b')+'<div class="tl-body"></div>'; body=T.querySelector('.tl-body'); TOOLS[i].b(); enhance(); if(TOOLS[i].k){ prepFields(); layoutT(true); } else { act=null; layoutT(false); } if(upd) upd(); jump(1); }
+  function tBack(){ if(T.querySelector('.tl-body')) showGrid(-1); else tClose(); }
+  T.addEventListener('click',function(e){
+    var t=e.target.closest('.tl-t'), a=e.target.closest('[data-a]'), h=e.target.closest('[data-h]'), n=e.target.closest('input'), c=e.target.closest('[data-c]');
+    if(t) showTool(+t.getAttribute('data-i')); else if(a) tBack();
+    else if(c){ Array.prototype.forEach.call(c.parentNode.children,function(b){ b.classList.remove('on'); }); c.classList.add('on'); if(upd) upd(); }
+    else if(h) toolKey('H'+h.getAttribute('data-h'));
+    else if(n&&n.readOnly&&body&&body.contains(n)) setAct(n); });
+  ['input','change'].forEach(function(ev){ T.addEventListener(ev,function(){ if(upd) upd(); }); });
+  /* ---- ਲੰਮਾ ਦਬਾਓ → ਟੂਲ ਚੁਣਿਆ ਜਾਂਦਾ ਹੈ → ਖਿੱਚ ਕੇ ਕਿਸੇ ਹੋਰ ਥਾਂ ਛੱਡੋ (ਕ੍ਰਮ ਬਦਲਦਾ ਤੇ ਸੇਵ ਹੁੰਦਾ ਹੈ) ---- */
+  var lp=null, dg=null, dgTm=0, noClk=0;
+  function gridEl(){ return T.querySelector('.tl-grid'); }
+  function lpCancel(){ if(lp){ clearTimeout(lp.t); lp=null; } }
+  function lpStart(x,y,t){
+    lpCancel(); var g=gridEl(), el=t&&t.closest&&t.closest('.tl-t');
+    if(!g||!el||!g.contains(el)) return;
+    lp={el:el,x:x,y:y,lx:x,ly:y,t:setTimeout(lpPick,420)};
+  }
+  function lpMove(x,y){ if(!lp) return; lp.lx=x; lp.ly=y; if(Math.abs(x-lp.x)>10||Math.abs(y-lp.y)>10) lpCancel(); }
+  function lpPick(){
+    if(!lp) return; var el=lp.el, x=lp.lx, y=lp.ly; lp=null;
+    var g=gridEl(); if(!g||!g.contains(el)) return;
+    dg={el:el,grid:g,x:x,y:y}; sw=null;
+    el.classList.add('lift'); g.classList.add('dg');
+    try{ if(navigator.vibrate) navigator.vibrate(18); }catch(e){}
+    dgPlace(); dgTm=setInterval(dgTick,30);
+  }
+  function dgPlace(){
+    var el=dg.el, sc=st.s||1; el.style.transform='none';
+    var r=el.getBoundingClientRect();
+    el.style.transform='translate('+((dg.x-(r.left+r.width/2))/sc)+'px,'+((dg.y-(r.top+r.height/2))/sc)+'px) scale(1.06)';
+  }
+  function dgReorder(o){
+    var g=dg.grid, kids=Array.prototype.slice.call(g.children), first=[], sc=st.s||1;
+    kids.forEach(function(k){ if(k!==dg.el){ k.style.transition='none'; k.style.transform=''; } });
+    kids.forEach(function(k){ if(k!==dg.el){ var r=k.getBoundingClientRect(); first.push([k,r.left,r.top]); } });
+    g.insertBefore(dg.el, kids.indexOf(dg.el)<kids.indexOf(o)?o.nextSibling:o);
+    first.forEach(function(f){
+      var k=f[0], r=k.getBoundingClientRect(), dx=(f[1]-r.left)/sc, dy=(f[2]-r.top)/sc;
+      if(dx||dy) k.style.transform='translate('+dx+'px,'+dy+'px)';
+    });
+    void g.offsetWidth;
+    first.forEach(function(f){ f[0].style.transition='transform .2s ease-out'; f[0].style.transform=''; });
+  }
+  function dgHit(){
+    var o=document.elementFromPoint(dg.x,dg.y); o=o&&o.closest&&o.closest('.tl-t');
+    if(o&&o!==dg.el&&dg.grid.contains(o)){ dgReorder(o); dgPlace(); }
+  }
+  function dgMove(x,y){ dg.x=x; dg.y=y; dgPlace(); dgHit(); }
+  function dgTick(){
+    if(!dg) return; var g=dg.grid, r=g.getBoundingClientRect(), v=0;
+    if(dg.y<r.top+26) v=-8; else if(dg.y>r.bottom-26) v=8;
+    if(v&&((v<0&&g.scrollTop>0)||(v>0&&g.scrollTop<g.scrollHeight-g.clientHeight))){ g.scrollTop+=v; dgPlace(); dgHit(); }
+  }
+  function dgEnd(){
+    lpCancel(); if(!dg) return;
+    clearInterval(dgTm); var d=dg; dg=null;
+    d.el.classList.remove('lift'); d.el.style.transform=''; d.grid.classList.remove('dg');
+    Array.prototype.forEach.call(d.grid.children,function(k){ k.style.transition=''; k.style.transform=''; });
+    ord=Array.prototype.map.call(d.grid.children,function(k){ return +k.getAttribute('data-i'); });
+    saveOrd(); noClk=Date.now()+450; /* ਛੱਡਣ ਵੇਲੇ ਟੂਲ ਖੁੱਲ੍ਹ ਨਾ ਜਾਵੇ */
+  }
+  T.addEventListener('click',function(e){ if(Date.now()<noClk){ e.stopPropagation(); e.preventDefault(); } },true);
+  T.addEventListener('contextmenu',function(e){ if(e.target.closest&&e.target.closest('.tl-grid')) e.preventDefault(); });
+  T.addEventListener('touchstart',function(e){ if(e.touches.length===1) lpStart(e.touches[0].clientX,e.touches[0].clientY,e.target); else { lpCancel(); dgEnd(); } },{passive:true});
+  T.addEventListener('touchmove',function(e){
+    var t=e.touches[0]; if(!t) return;
+    if(dg){ e.preventDefault(); dgMove(t.clientX,t.clientY); } else lpMove(t.clientX,t.clientY);
+  },{passive:false});
+  T.addEventListener('touchend',dgEnd,{passive:true});
+  T.addEventListener('touchcancel',dgEnd,{passive:true});
+  T.addEventListener('pointerdown',function(e){ if(e.pointerType==='mouse'&&e.button===0) lpStart(e.clientX,e.clientY,e.target); });
+  window.addEventListener('pointermove',function(e){ if(e.pointerType!=='mouse') return; if(dg) dgMove(e.clientX,e.clientY); else lpMove(e.clientX,e.clientY); });
+  window.addEventListener('pointerup',function(e){ if(e.pointerType==='mouse') dgEnd(); });
+  /* ਸਵਾਈਪ: ਛੂਹ ਲਈ touch ਘਟਨਾਵਾਂ (ਇਹ ਰੱਦ ਨਹੀਂ ਹੁੰਦੀਆਂ), ਮਾਊਸ ਲਈ pointer; ਉਂਗਲ ਹਿਲਦੇ ਹੀ ਚੱਲ ਪੈਂਦਾ ਹੈ */
+  function swS(t,x,y){ sw=(t.closest&&t.closest('.hkc-main,.hkc-tape,.hkc-tools,.hkc-keys')&&!t.closest('input,select,.hkc-hbtn,.tl-sheet'))?{x:x,y:y,in:!!t.closest('.hkc-tools')}:null; }
+  function swM(x,y){
+    if(!sw) return; var dx=(x-sw.x)/st.s, dy=(y-sw.y)/st.s;
+    if(Math.abs(dx)>40&&Math.abs(dx)>Math.abs(dy)*1.2){
+      var s=sw; sw=null;
+      if(dx<0&&!s.in){ showGrid(); tOpen(); } else if(dx>0&&s.in) tBack();
+    }
+  }
+  var po={capture:true,passive:true};
+  panel.addEventListener('touchstart',function(e){ if(e.touches.length===1) swS(e.target,e.touches[0].clientX,e.touches[0].clientY); else sw=null; },po);
+  panel.addEventListener('touchmove',function(e){ if(e.touches.length===1) swM(e.touches[0].clientX,e.touches[0].clientY); },po);
+  panel.addEventListener('touchend',function(){ sw=null; },po);
+  panel.addEventListener('touchcancel',function(){ sw=null; },po);
+  panel.addEventListener('pointerdown',function(e){ if(e.pointerType==='mouse') swS(e.target,e.clientX,e.clientY); },true);
+  panel.addEventListener('pointermove',function(e){ if(e.pointerType==='mouse') swM(e.clientX,e.clientY); },true);
+  panel.addEventListener('pointerup',function(e){ if(e.pointerType==='mouse') sw=null; },true);
+  /* ---- ਫੁੱਲ ਸਕ੍ਰੀਨ ↔ ਛੋਟਾ ਬਟਨ (ਉੱਪਰ ਖੱਬੇ) ---- */
+  var fsB=$('hkcFs'), fs=false, prev=null;
+  var SV='<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="';
+  var EXP=SV+'M4 4l16 16M4 9.5V4h5.5M20 14.5V20h-5.5"/></svg>', SHR=SV+'M4 4l6.5 6.5M10.5 5.5v5h-5M20 20l-6.5-6.5M13.5 18.5v-5h5"/></svg>';
+  function fsIcon(on){ fs=on; document.documentElement.classList.toggle('hk-full',on); fsB.innerHTML=on?SHR:EXP; if(!on){ panel.classList.remove('fsz'); panel.style.height=''; panel.style.width=''; } }
+  /* ਪੂਰੀ ਸਕ੍ਰੀਨ: ਵੱਡਾ (zoom) ਨਹੀਂ ਕਰਦੇ; ਪੈਨਲ ਦੀ ਚੌੜਾਈ-ਉਚਾਈ ਹੀ ਸਕ੍ਰੀਨ ਜਿੰਨੀ ਕਰਦੇ ਹਾਂ, ਅੱਖਰ ਤੇ ਬਟਨ ਆਮ ਆਕਾਰ ਦੇ ਰਹਿੰਦੇ ਹਨ */
+  var FS_MAXW=330; /* ਵੱਡੀ ਸਕ੍ਰੀਨ 'ਤੇ ਚੌੜਾਈ ਸੀਮਤ (ਫ਼ੋਨ 'ਤੇ ਪਹਿਲਾਂ ਵਾਂਗ ਪੂਰੀ) */
+  function fsFit(){
+    var vw=window.innerWidth, vh=window.innerHeight;
+    panel.classList.add('fsz'); panel.style.width=Math.max(200,vw-16)+'px'; panel.style.height=Math.max(300,vh-48)+'px'; measure(); /* ਪੈਨਲ ਦੀ padding (16 ਤੇ 48) ਜੋੜ ਕੇ ਪੂਰੀ ਸਕ੍ਰੀਨ */
+    st.s=1; st.x=0; st.y=0;
+  }
+  fsB.addEventListener('click',function(e){
+    e.stopPropagation(); measure();
+    if(!fs){ prev={s:st.s,x:st.x,y:st.y}; fsFit(); fsIcon(true); }
+    else { var p=prev||{s:1,x:st.x,y:st.y}; fsIcon(false); measure(); st.s=clampS(p.s); st.x=p.x; st.y=p.y; }
+    clampPos(); save();
+  });
+  window.addEventListener('resize',function(){ if(fs&&st.open){ fsFit(); clampPos(); } });
+  fsIcon(false);
+  applyTr(); renderTape(); render();
+  window.ntCalcToggle=function(){ setOpen(!st.open); };
+  setOpen(true); /* ਪੇਜ ਖੁੱਲ੍ਹਦੇ ਹੀ ਕੈਲਕੁਲੇਟਰ ਸਿੱਧਾ ਖੁੱਲ੍ਹਦਾ ਹੈ */
+  /* ਸ਼ੁਰੂ ਵਿੱਚ ਛੋਟੇ ਆਕਾਰ ਵਿੱਚ, ਪਿਛਲੀ ਥਾਂ/ਸਾਈਜ਼ 'ਤੇ ਖੁੱਲ੍ਹਦਾ ਹੈ; ਉੱਪਰ ਖੱਬੇ ਬਟਨ ਨਾਲ ਫੁੱਲ ਸਕ੍ਰੀਨ */
+  clampPos(); prev={s:st.s,x:st.x,y:st.y};
+  fsIcon(true); fsFit(); clampPos(); /* ਸ਼ੁਰੂ ਵਿੱਚ ਪੂਰੀ ਸਕ੍ਰੀਨ 'ਤੇ ਖੁੱਲ੍ਹਦਾ ਹੈ */
+  window.ntCalcClose=function(){ if(st.open) setOpen(false); };
+  window.ntCalcIsOpen=function(){ return !!st.open; };
+})();
+</script>
+</body></html>
