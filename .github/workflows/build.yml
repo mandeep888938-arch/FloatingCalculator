@@ -19,13 +19,295 @@ jobs:
         run: |
           mkdir -p www
           cp index.html www/index.html
-      - name: Create Capacitor project
+      - name: Create Android project
         run: |
           npm init -y
           npm i @capacitor/core @capacitor/cli @capacitor/android
           npx cap init FloatingCalculator com.mandeep.floatingcalculator --web-dir=www
           npx cap add android
           npx cap sync android
+      - name: Add floating overlay code
+        run: |
+          APP=android/app/src/main
+          JAVA=$APP/java/com/mandeep/floatingcalculator
+          mkdir -p $APP/assets $JAVA
+          cp index.html $APP/assets/index.html
+
+          cat > $APP/AndroidManifest.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <application
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="Floating Calculator"
+                  android:allowBackup="true">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:theme="@android:style/Theme.Translucent.NoTitleBar">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+                  <service
+                      android:name=".FloatingService"
+                      android:exported="false"
+                      android:foregroundServiceType="specialUse">
+                      <property
+                          android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                          android:value="floating_calculator" />
+                  </service>
+              </application>
+          </manifest>
+          EOF
+
+          cat > $JAVA/MainActivity.java << 'EOF'
+          package com.mandeep.floatingcalculator;
+
+          import android.app.Activity;
+          import android.content.Intent;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.provider.Settings;
+          import android.widget.Toast;
+
+          public class MainActivity extends Activity {
+              private boolean asked = false;
+
+              @Override
+              protected void onResume() {
+                  super.onResume();
+                  if (Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(this)) {
+                      Intent i = new Intent(this, FloatingService.class);
+                      if (Build.VERSION.SDK_INT >= 26) {
+                          startForegroundService(i);
+                      } else {
+                          startService(i);
+                      }
+                      finish();
+                  } else if (!asked) {
+                      asked = true;
+                      Toast.makeText(this, "Allow 'Display over other apps' for this app", Toast.LENGTH_LONG).show();
+                      startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                              Uri.parse("package:" + getPackageName())));
+                  }
+              }
+          }
+          EOF
+
+          cat > $JAVA/FloatingService.java << 'EOF'
+          package com.mandeep.floatingcalculator;
+
+          import android.app.Notification;
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.app.Service;
+          import android.content.Intent;
+          import android.content.pm.ServiceInfo;
+          import android.graphics.Color;
+          import android.graphics.PixelFormat;
+          import android.os.Build;
+          import android.os.IBinder;
+          import android.view.Gravity;
+          import android.view.MotionEvent;
+          import android.view.View;
+          import android.view.WindowManager;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.widget.LinearLayout;
+          import android.widget.TextView;
+
+          public class FloatingService extends Service {
+              private WindowManager wm;
+              private LinearLayout root;
+              private WindowManager.LayoutParams lp;
+              private WebView web;
+              private float density;
+
+              @Override
+              public IBinder onBind(Intent intent) {
+                  return null;
+              }
+
+              @Override
+              public int onStartCommand(Intent intent, int flags, int startId) {
+                  if (intent != null && "STOP".equals(intent.getAction())) {
+                      stopSelf();
+                      return START_NOT_STICKY;
+                  }
+                  startFg();
+                  if (root == null) {
+                      createOverlay();
+                  }
+                  return START_STICKY;
+              }
+
+              private void startFg() {
+                  String ch = "calc_channel";
+                  if (Build.VERSION.SDK_INT >= 26) {
+                      NotificationChannel c = new NotificationChannel(ch, "Floating Calculator",
+                              NotificationManager.IMPORTANCE_LOW);
+                      getSystemService(NotificationManager.class).createNotificationChannel(c);
+                  }
+                  Intent stop = new Intent(this, FloatingService.class);
+                  stop.setAction("STOP");
+                  PendingIntent pi = PendingIntent.getService(this, 0, stop,
+                          PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+                  Notification.Builder b = Build.VERSION.SDK_INT >= 26
+                          ? new Notification.Builder(this, ch)
+                          : new Notification.Builder(this);
+                  b.setContentTitle("Floating Calculator")
+                          .setContentText("Tap here to close")
+                          .setSmallIcon(android.R.drawable.ic_menu_edit)
+                          .setContentIntent(pi)
+                          .setOngoing(true);
+                  Notification n = b.build();
+                  if (Build.VERSION.SDK_INT >= 34) {
+                      startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+                  } else {
+                      startForeground(1, n);
+                  }
+              }
+
+              private TextView makeBtn(String text) {
+                  TextView t = new TextView(this);
+                  t.setText(text);
+                  t.setTextColor(Color.WHITE);
+                  t.setTextSize(18);
+                  t.setGravity(Gravity.CENTER);
+                  t.setPadding((int) (14 * density), 0, (int) (14 * density), 0);
+                  t.setLayoutParams(new LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.WRAP_CONTENT,
+                          LinearLayout.LayoutParams.MATCH_PARENT));
+                  return t;
+              }
+
+              private void resize(float factor) {
+                  int minW = (int) (200 * density);
+                  int minH = (int) (280 * density);
+                  int maxW = getResources().getDisplayMetrics().widthPixels;
+                  int maxH = getResources().getDisplayMetrics().heightPixels;
+                  lp.width = Math.max(minW, Math.min(maxW, (int) (lp.width * factor)));
+                  lp.height = Math.max(minH, Math.min(maxH, (int) (lp.height * factor)));
+                  wm.updateViewLayout(root, lp);
+              }
+
+              private void createOverlay() {
+                  wm = (WindowManager) getSystemService(WINDOW_SERVICE);
+                  density = getResources().getDisplayMetrics().density;
+                  int screenW = getResources().getDisplayMetrics().widthPixels;
+                  int type = Build.VERSION.SDK_INT >= 26
+                          ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                          : WindowManager.LayoutParams.TYPE_PHONE;
+                  int w = Math.min((int) (320 * density), screenW - (int) (20 * density));
+                  lp = new WindowManager.LayoutParams(w, (int) (480 * density), type,
+                          WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                          PixelFormat.TRANSLUCENT);
+                  lp.gravity = Gravity.TOP | Gravity.START;
+                  lp.x = (int) (10 * density);
+                  lp.y = (int) (100 * density);
+
+                  root = new LinearLayout(this);
+                  root.setOrientation(LinearLayout.VERTICAL);
+                  root.setBackgroundColor(Color.parseColor("#222222"));
+
+                  LinearLayout bar = new LinearLayout(this);
+                  bar.setOrientation(LinearLayout.HORIZONTAL);
+                  bar.setBackgroundColor(Color.parseColor("#222222"));
+                  bar.setLayoutParams(new LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT, (int) (38 * density)));
+
+                  TextView title = new TextView(this);
+                  title.setText("\u2630  Calculator");
+                  title.setTextColor(Color.WHITE);
+                  title.setTextSize(14);
+                  title.setGravity(Gravity.CENTER_VERTICAL);
+                  title.setPadding((int) (12 * density), 0, 0, 0);
+                  title.setLayoutParams(new LinearLayout.LayoutParams(
+                          0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
+
+                  final float[] start = new float[4];
+                  title.setOnTouchListener(new View.OnTouchListener() {
+                      @Override
+                      public boolean onTouch(View v, MotionEvent e) {
+                          switch (e.getAction()) {
+                              case MotionEvent.ACTION_DOWN:
+                                  start[0] = lp.x;
+                                  start[1] = lp.y;
+                                  start[2] = e.getRawX();
+                                  start[3] = e.getRawY();
+                                  return true;
+                              case MotionEvent.ACTION_MOVE:
+                                  lp.x = (int) (start[0] + (e.getRawX() - start[2]));
+                                  lp.y = (int) (start[1] + (e.getRawY() - start[3]));
+                                  wm.updateViewLayout(root, lp);
+                                  return true;
+                          }
+                          return false;
+                      }
+                  });
+
+                  TextView smaller = makeBtn("\u2212");
+                  smaller.setOnClickListener(new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          resize(0.87f);
+                      }
+                  });
+                  TextView bigger = makeBtn("+");
+                  bigger.setOnClickListener(new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          resize(1.15f);
+                      }
+                  });
+                  TextView close = makeBtn("\u2715");
+                  close.setOnClickListener(new View.OnClickListener() {
+                      @Override
+                      public void onClick(View v) {
+                          stopSelf();
+                      }
+                  });
+
+                  bar.addView(title);
+                  bar.addView(smaller);
+                  bar.addView(bigger);
+                  bar.addView(close);
+
+                  web = new WebView(this);
+                  WebSettings s = web.getSettings();
+                  s.setJavaScriptEnabled(true);
+                  s.setDomStorageEnabled(true);
+                  s.setAllowFileAccess(true);
+                  web.setBackgroundColor(Color.WHITE);
+                  web.setLayoutParams(new LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+                  web.loadUrl("file:///android_asset/index.html");
+
+                  root.addView(bar);
+                  root.addView(web);
+                  wm.addView(root, lp);
+              }
+
+              @Override
+              public void onDestroy() {
+                  super.onDestroy();
+                  if (root != null && wm != null) {
+                      wm.removeView(root);
+                      root = null;
+                  }
+                  if (web != null) {
+                      web.destroy();
+                      web = null;
+                  }
+              }
+          }
+          EOF
       - name: Build APK
         run: |
           cd android
